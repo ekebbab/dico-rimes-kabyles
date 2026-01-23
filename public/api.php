@@ -1,18 +1,14 @@
 <?php
 // public/api.php
 header('Content-Type: application/json');
-
 require_once __DIR__ . '/../src/RhymeEngine.php';
 
-$engine = new RhymeEngine();
 $q = $_GET['q'] ?? '';
+$results = [];
 
-if (strlen($q) < 1) {
-    echo json_encode([]);
-    exit;
+if (!empty($q)) {
+    $engine = new RhymeEngine();
+    $results = $engine->searchByRhyme($q);
 }
 
-$results = $engine->searchByRhyme($q);
-
-// On ne renvoie que les données pures
 echo json_encode($results);

@@ -1,36 +1,58 @@
 // public/js/app.js
+
 document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.querySelector('input[name="q"]');
-    const resultsContainer = document.querySelector('.grid');
+    const searchInput = document.getElementById('searchInput');
+    const resultsGrid = document.querySelector('.grid');
     const statsContainer = document.querySelector('.stats');
 
-    searchInput.addEventListener('input', async (e) => {
-        const query = e.target.value;
+    if (!searchInput) return;
 
-        if (query.length < 1) {
-            resultsContainer.innerHTML = '';
-            statsContainer.textContent = '';
-            return;
-        }
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
 
-        try {
-            const response = await fetch(`api.php?q=${encodeURIComponent(query)}`);
-            const data = await response.json();
-
-            // Mise à jour des stats
-            statsContainer.textContent = `${data.length} résultat(s) pour "${query}"`;
-
-            // Génération des cartes
-            resultsContainer.innerHTML = data.map(item => `
-                <div class="card">
-                    <h3>${item.mot}</h3>
-                    <p><strong>Signification :</strong> ${item.signification || 'N/A'}</p>
-                    ${item.exemple ? `<small><em>Ex : ${item.exemple}</em></small>` : ''}
-                </div>
-            `).join('');
-
-        } catch (error) {
-            console.error('Erreur lors de la recherche:', error);
+        // On ne déclenche la recherche qu'à partir de 1 caractère
+        if (query.length >= 1) {
+            fetch(`api.php?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateUI(data, query);
+                })
+                .catch(error => console.error('Erreur:', error));
         }
     });
+
+    function updateUI(results, query) {
+        // 1. Mise à jour des stats
+        if (statsContainer) {
+            statsContainer.innerHTML = `<strong>${results.length}</strong> résultat(s) pour la rime "<strong>${query}</strong>"`;
+        }
+
+        // 2. Génération des cartes
+        if (results.length > 0) {
+            resultsGrid.innerHTML = results.map(row => `
+                <div class="card">
+                    <h3>${escapeHtml(row.mot)}</h3>
+                    <span class="rime">${escapeHtml(row.rime)}</span>
+                    <p class="signification">
+                        <strong>Signification :</strong><br>
+                        ${escapeHtml(row.signification || 'Aucune définition renseignée.')}
+                    </p>
+                    ${row.exemple ? `
+                        <div class="word-example" style="margin-top: 15px; font-size: 0.9rem; border-left: 2px solid var(--accent-color); padding-left: 10px;">
+                            <small><em><strong>Ex :</strong> ${escapeHtml(row.exemple)}</em></small>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        } else {
+            resultsGrid.innerHTML = `<p>Aucun résultat pour "${escapeHtml(query)}".</p>`;
+        }
+    }
+
+    // Sécurité pour éviter les injections XSS dans le JS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 });
