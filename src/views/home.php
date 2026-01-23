@@ -15,7 +15,13 @@
                 <button type="submit">Rechercher</button>
             </form>
         </header>
-
+		<?php if (!empty($searchQuery)): ?>
+			<div class="actions">
+				<a href="download_pdf.php?q=<?= urlencode($searchQuery) ?>" class="btn-pdf">
+					📄 Télécharger les résultats en PDF
+				</a>
+			</div>
+		<?php endif; ?>
         <main>
             <?php if (!empty($searchQuery)): ?>
                 <p class="stats"><?= count($results) ?> résultat(s) pour "<?= htmlspecialchars($searchQuery) ?>"</p>
