@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<?php include __DIR__ . '/navbar.php'; ?>
     <div class="container">
         <header>
             <h1>Dico Kabyle des rimes</h1>

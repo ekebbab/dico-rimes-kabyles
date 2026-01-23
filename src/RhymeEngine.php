@@ -36,4 +36,7 @@ class RhymeEngine {
         $stmt->execute(['query' => $query . '%']);
         return $stmt->fetchAll();
     }
+	
+	/*pour que Auth.php puisse accéder à la base*/
+	public function getPDO() { return $this->pdo; }
 }
