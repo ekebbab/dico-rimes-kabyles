@@ -2,39 +2,36 @@
 // src/Auth.php
 
 class Auth {
-    private $pdo;
+    
+    public static function login($username, $password) {
+        // Simulation d'identifiants (à remplacer par une requête BDD plus tard)
+        $admin_user = "admin";
+        $admin_pass = "admin"; 
 
-    public function __construct($pdo) {
-        $this->pdo = $pdo;
-        // On démarre la session si elle n'existe pas
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-    }
-
-    public function login($username, $password) {
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE username = :username");
-        $stmt->execute(['username' => $username]);
-        $user = $stmt->fetch();
-
-        // Vérification du mot de passe (haché)
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
+        if ($username === $admin_user && $password === $admin_pass) {
+            // On démarre la session si elle n'est pas déjà lancée
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            $_SESSION['logged_in'] = true;
+            $_SESSION['username'] = $username;
             return true;
         }
+        
         return false;
     }
 
     public static function isLogged() {
-        if (session_status() === PHP_SESSION_NONE) session_start();
-        return isset($_SESSION['user_id']);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        return isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
     }
 
-    public function logout() {
+    public static function logout() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         session_destroy();
-        header('Location: login.php');
-        exit;
     }
 }

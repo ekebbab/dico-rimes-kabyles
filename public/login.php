@@ -1,14 +1,12 @@
 <?php
-require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
 
-$engine = new RhymeEngine(); // Contient déjà la connexion PDO
-$auth = new Auth($engine->getPDO()); // On va devoir ajouter une méthode getPDO() dans RhymeEngine
-
-$error = null;
-
+$error = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($auth->login($_POST['username'], $_POST['password'])) {
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
+
+    if (Auth::login($username, $password)) {
         header('Location: admin.php');
         exit;
     } else {
@@ -17,22 +15,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="ber">
 <head>
     <meta charset="UTF-8">
-    <title>Connexion - Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Dico Kabyle Admin</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<?php include __DIR__ . '/../src/views/navbar.php'; ?>
-    <div class="container">
-        <form method="POST" style="max-width: 400px; margin: 100px auto; background: white; padding: 20px; border-radius: 8px;">
-            <h2>Connexion Admin</h2>
-            <?php if ($error): ?> <p style="color: red;"><?= $error ?></p> <?php endif; ?>
-            <input type="text" name="username" placeholder="Nom d'utilisateur" required style="width: 100%; margin-bottom: 10px;">
-            <input type="password" name="password" placeholder="Mot de passe" required style="width: 100%; margin-bottom: 20px;">
-            <button type="submit" style="width: 100%;">Se connecter</button>
-        </form>
-    </div>
+    <?php include __DIR__ . '/../src/views/navbar.php'; ?>
+
+    <main class="container login-wrapper">
+        <section class="login-card">
+            <header>
+                <h2>Espace Admin</h2>
+            </header>
+            
+            <?php if ($error): ?>
+                <div class="error-box" role="alert">
+                    <?= htmlspecialchars($error) ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label for="username">Utilisateur</label>
+                    <input type="text" id="username" name="username" placeholder="Votre pseudo..." required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" placeholder="••••••••" required>
+                </div>
+
+                <button type="submit">Se connecter</button>
+            </form>
+
+            <footer style="margin-top: 20px; text-align: center;">
+                <a href="index.php" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">
+                    ← Retour au dictionnaire
+                </a>
+            </footer>
+        </section>
+    </main>
 </body>
 </html>

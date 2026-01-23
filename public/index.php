@@ -1,17 +1,19 @@
 <?php
 // public/index.php
-
-// Chargement des classes
 require_once __DIR__ . '/../src/RhymeEngine.php';
 
 $engine = new RhymeEngine();
-$results = [];
-$searchQuery = $_GET['q'] ?? '';
 
-if (!empty($searchQuery)) {
-    // Par défaut, on cherche par rime (terminaison)
-    $results = $engine->searchByRhyme($searchQuery);
-}
+$params = [
+    'q'     => $_GET['q'] ?? '',
+    'sort'  => $_GET['sort'] ?? 'created_at', 
+    'order' => $_GET['order'] ?? 'desc',
+    'limit' => $_GET['limit'] ?? '20'
+];
 
-// On inclut la vue (le HTML)
+// On définit explicitement la variable attendue par home.php
+$searchQuery = $params['q']; 
+
+$results = $engine->searchAdvanced($params);
+
 include __DIR__ . '/../src/views/home.php';

@@ -39,4 +39,40 @@ class RhymeEngine {
 	
 	/*pour que Auth.php puisse accéder à la base*/
 	public function getPDO() { return $this->pdo; }
+	
+	
+	/**
+	 * Recherche avancée adaptée à la table "rimes"
+	 */
+	public function searchAdvanced($params) {
+		// On cible bien ta table "rimes"
+		$sql = "SELECT * FROM rimes WHERE 1=1";
+		$binds = [];
+
+		// 1. Recherche textuelle multi-colonnes
+		if (!empty($params['q'])) {
+			$sql .= " AND (mot LIKE :q OR rime LIKE :q OR signification LIKE :q OR exemple LIKE :q)";
+			$binds['q'] = '%' . $params['q'] . '%';
+		}
+
+		// 2. Tri dynamique sécurisé
+		// On adapte les colonnes : "date_ajout" devient "created_at"
+		$allowedSort = ['mot', 'rime', 'created_at', 'famille'];
+		$sort = in_array($params['sort'], $allowedSort) ? $params['sort'] : 'created_at';
+		
+		// Gestion de l'ordre
+		$order = (isset($params['order']) && strtolower($params['order']) === 'asc') ? 'ASC' : 'DESC';
+		
+		$sql .= " ORDER BY $sort $order";
+
+		// 3. Limitation
+		if (!empty($params['limit']) && $params['limit'] !== 'all') {
+			$limit = (int)$params['limit'];
+			$sql .= " LIMIT $limit";
+		}
+
+		$stmt = $this->pdo->prepare($sql);
+		$stmt->execute($binds);
+		return $stmt->fetchAll(PDO::FETCH_ASSOC);
+	}
 }

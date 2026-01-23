@@ -14,12 +14,10 @@
             <h1>Dico Kabyle des rimes</h1>
             
             <form action="index.php" method="GET" class="search-form">
-                <input type="text" 
-                       name="q" 
-                       id="searchInput"
-                       placeholder="Entrez une terminaison (ex: 'un')..." 
-                       value="<?= htmlspecialchars($searchQuery) ?>"
-                       autocomplete="off">
+				<input type="text" 
+				name="q" 
+				placeholder="Rechercher une rime..." 
+				value="<?= htmlspecialchars($searchQuery ?? '') ?>">
                 <button type="submit">Rechercher</button>
             </form>
         </header>
