@@ -1,37 +1,65 @@
 <?php
-// src/Auth.php
+/**
+ * CLASSE Auth
+ * Gère l'authentification, la déconnexion et les rôles.
+ */
 
 class Auth {
-    
-    public static function login($username, $password) {
-        // Simulation d'identifiants (à remplacer par une requête BDD plus tard)
-        $admin_user = "admin";
-        $admin_pass = "admin"; 
-
-        if ($username === $admin_user && $password === $admin_pass) {
-            // On démarre la session si elle n'est pas déjà lancée
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            $_SESSION['logged_in'] = true;
-            $_SESSION['username'] = $username;
-            return true;
+    /**
+     * Démarre la session de manière sécurisée
+     */
+    public static function init() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
         }
-        
-        return false;
     }
 
+    /**
+     * Vérifie si l'utilisateur est connecté
+     */
     public static function isLogged() {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        return isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
+        self::init();
+        return isset($_SESSION['user_id']);
     }
 
+    /**
+     * Retourne le rôle de l'utilisateur (user, admin, superadmin)
+     */
+    public static function getRole() {
+        self::init();
+        return $_SESSION['role'] ?? 'guest';
+    }
+
+    /**
+     * Retourne l'ID de l'utilisateur
+     */
+    public static function getUserId() {
+        self::init();
+        return $_SESSION['user_id'] ?? null;
+    }
+
+    /**
+     * Gère la déconnexion
+     */
     public static function logout() {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        self::init();
+        $_SESSION = array();
         session_destroy();
+    }
+
+    /**
+     * Vérifie les permissions selon la hiérarchie
+     */
+    public static function canManage($author_id, $author_role = 'user') {
+        if (!self::isLogged()) return false;
+
+        $myId = self::getUserId();
+        $myRole = self::getRole();
+
+        if ($myRole === 'superadmin') return true;
+        if ($myRole === 'admin') return ($author_role !== 'superadmin');
+        if ($myRole === 'user') return ($myId == $author_id);
+
+        return false;
     }
 }

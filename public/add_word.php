@@ -1,14 +1,20 @@
 <?php
+/**
+ * PAGE D'AJOUT DE MOT
+ * Liaison automatique à l'auteur et gestion des familles Kabyle.
+ */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
 
-$engine = new RhymeEngine();
+Auth::init();
 if (!Auth::isLogged()) { header('Location: login.php'); exit; }
 
+$engine = new RhymeEngine();
 $admin = new AdminEngine($engine->getPDO());
 $message = "";
 
+// Données des rimes Kabyle
 $familles = [
     'B'=>['BA','BI','BU','AB','IB','UB','EB'], 'C'=>['CA','CI','CU','AC','IC','UC','EC'],
     'Č'=>['ČA','ČI','ČU','AČ','IČ','UČ','EČ'], 'D'=>['DA','DI','DU','AD','ID','UD','ED'],
@@ -28,78 +34,36 @@ $familles = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
-        'mot'           => $_POST['mot'],
-        'rime'          => $_POST['rime'],
-        'signification' => $_POST['signification'],
-        'exemple'       => $_POST['exemple'],
-        'famille'       => $_POST['famille']
+        'mot'           => trim($_POST['mot']),
+        'rime'          => trim($_POST['rime']),
+        'signification' => trim($_POST['signification']),
+        'exemple'       => trim($_POST['exemple']),
+        'famille'       => trim($_POST['famille'])
     ];
 
-    if ($admin->addWord($data)) {
-        $message = "<p class='success-msg'>✅ Mot ajouté avec succès !</p>";
-    } else {
-        $message = "<p class='error-msg'>❌ Erreur lors de l'insertion.</p>";
+    if (!empty($data['mot']) && !empty($data['rime'])) {
+        if ($admin->addWord($data)) {
+            $message = "<p class='success-msg'>✅ Mot ajouté avec succès !</p>";
+        } else {
+            $message = "<p class='error-msg'>❌ Erreur lors de l'insertion.</p>";
+        }
     }
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="ber">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <title>Ajouter un mot - Admin</title>
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Structure du formulaire en grille 2 colonnes */
-        .admin-form { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; /* Deux colonnes de largeur égale */
-            gap: 25px; 
-            background: white; 
-            padding: 30px; 
-            border-radius: 12px; 
-            box-shadow: var(--shadow);
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .form-group { display: flex; flex-direction: column; }
-        
-        /* On force tous les champs à prendre 100% de leur colonne */
-        .form-group input, 
-        .form-group select, 
-        .form-group textarea { 
-            width: 100%; 
-            box-sizing: border-box; /* Important pour que le padding ne dépasse pas */
-            padding: 12px; 
-            border: 1px solid var(--border-color); 
-            border-radius: 6px; 
-            font-size: 1rem; 
-        }
-
-        .full-width { grid-column: 1 / span 2; }
-        
-        .form-group label { font-weight: bold; margin-bottom: 8px; color: var(--primary-color); }
-        .success-msg { text-align: center; color: #27ae60; font-weight: bold; }
-        .error-msg { text-align: center; color: #e74c3c; font-weight: bold; }
-        
-        button[type="submit"] {
-            margin-top: 10px;
-            width: 100%;
-            padding: 15px;
-            background-color: var(--accent-color);
-            color: white;
-            border-radius: 8px;
-            font-size: 1.1rem;
-        }
-    </style>
 </head>
 <body>
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
     
     <div class="container">
-        <header>
+        <header class="admin-header" style="background:none; box-shadow:none; padding:0;">
             <h1>Nouveau mot</h1>
+            <a href="admin.php" class="btn-primary">← Dashboard</a>
         </header>
 
         <?= $message ?>
@@ -136,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="full-width">
-                <button type="submit">Enregistrer dans le dictionnaire</button>
+                <button type="submit" class="btn-large">Enregistrer dans le dictionnaire</button>
             </div>
         </form>
     </div>
@@ -149,18 +113,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         familleSelect.addEventListener('change', function() {
             const selectedFamille = this.value;
             rimeSelect.innerHTML = '<option value="">-- Choisir une rime --</option>';
-            
             if (selectedFamille && rimesData[selectedFamille]) {
                 rimeSelect.disabled = false;
                 rimesData[selectedFamille].forEach(rime => {
                     const option = document.createElement('option');
-                    option.value = rime;
-                    option.textContent = rime;
+                    option.value = rime; option.textContent = rime;
                     rimeSelect.appendChild(option);
                 });
-            } else {
-                rimeSelect.disabled = true;
-            }
+            } else { rimeSelect.disabled = true; }
         });
     </script>
 </body>

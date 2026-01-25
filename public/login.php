@@ -1,25 +1,57 @@
 <?php
+/**
+ * PAGE DE CONNEXION
+ * Gère l'authentification et l'initialisation des droits (rôles).
+ */
 require_once __DIR__ . '/../src/Auth.php';
+require_once __DIR__ . '/../src/RhymeEngine.php';
+
+Auth::init();
+
+// Si déjà connecté, redirection directe
+if (Auth::isLogged()) {
+    header('Location: admin.php');
+    exit;
+}
 
 $error = "";
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
+    $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (Auth::login($username, $password)) {
-        header('Location: admin.php');
-        exit;
+    if (empty($username) || empty($password)) {
+        $error = "Veuillez remplir tous les champs.";
     } else {
-        $error = "Identifiants incorrects.";
+        $engine = new RhymeEngine();
+        $db = $engine->getPDO();
+
+        // Récupération de l'utilisateur
+        $stmt = $db->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
+        $stmt->execute([$username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Vérification du mot de passe (haché)
+        if ($user && password_verify($password, $user['password'])) {
+            // Stockage des informations cruciales en session
+            $_SESSION['user_id']  = $user['id'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['role']     = $user['role']; // 'user', 'admin' ou 'superadmin'
+
+            header('Location: admin.php');
+            exit;
+        } else {
+            $error = "Identifiants incorrects.";
+        }
     }
 }
 ?>
 <!DOCTYPE html>
-<html lang="ber">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - Dico Kabyle Admin</title>
+    <title>Connexion - Dico Kabyle</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -28,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <main class="container login-wrapper">
         <section class="login-card">
             <header>
-                <h2>Espace Admin</h2>
+                <h2>Espace Membres</h2>
+                <p style="font-size: 0.8rem; color: var(--text-muted);">Connectez-vous pour gérer vos rimes</p>
             </header>
             
             <?php if ($error): ?>
@@ -39,8 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <form method="POST">
                 <div class="form-group">
-                    <label for="username">Utilisateur</label>
-                    <input type="text" id="username" name="username" placeholder="Votre pseudo..." required autofocus>
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" placeholder="Pseudo" required autofocus>
                 </div>
 
                 <div class="form-group">

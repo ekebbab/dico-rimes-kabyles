@@ -1,19 +1,38 @@
 <?php
+/**
+ * PAGE D'ÉDITION DE MOT
+ * Sécurisée par rôle et auteur.
+ */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
 
-$engine = new RhymeEngine();
+Auth::init();
 if (!Auth::isLogged()) { header('Location: login.php'); exit; }
 
+$engine = new RhymeEngine();
 $admin = new AdminEngine($engine->getPDO());
 $message = "";
 
-// Récupération du mot à modifier
-$id = $_GET['id'] ?? null;
-$word = $admin->getWordById($id);
+$id = (int)($_GET['id'] ?? 0);
+
+// Récupération des données avec infos auteur pour la sécurité
+$stmt = $engine->getPDO()->prepare("
+    SELECT r.*, u.role as author_role 
+    FROM rimes r 
+    LEFT JOIN users u ON r.auteur_id = u.id 
+    WHERE r.id = ?
+");
+$stmt->execute([$id]);
+$word = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$word) { die("Mot non trouvé."); }
+
+// VÉRIFICATION DES DROITS
+if (!Auth::canManage($word['auteur_id'], $word['author_role'])) {
+    header('Location: admin.php?msg=denied');
+    exit;
+}
 
 $familles = [
     'B'=>['BA','BI','BU','AB','IB','UB','EB'], 'C'=>['CA','CI','CU','AC','IC','UC','EC'],
@@ -34,49 +53,35 @@ $familles = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
-        'id'            => $id,
-        'mot'           => $_POST['mot'],
-        'rime'          => $_POST['rime'],
-        'signification' => $_POST['signification'],
-        'exemple'       => $_POST['exemple'],
-        'famille'       => $_POST['famille']
+        'mot'           => trim($_POST['mot']),
+        'rime'          => trim($_POST['rime']),
+        'signification' => trim($_POST['signification']),
+        'exemple'       => trim($_POST['exemple']),
+        'famille'       => trim($_POST['famille'])
     ];
 
     if ($admin->updateWord($id, $data)) {
         $message = "<p class='success-msg'>✅ Modifications enregistrées !</p>";
-        $word = $admin->getWordById($id); // Rafraîchir les données locales
+        // Recharger les données fraîches
+        $stmt->execute([$id]);
+        $word = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="ber">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Modifier le mot - Admin</title>
+    <title>Modifier : <?= htmlspecialchars($word['mot']) ?></title>
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        .admin-form { 
-            display: grid; grid-template-columns: 1fr 1fr; gap: 25px; 
-            background: white; padding: 30px; border-radius: 12px; 
-            box-shadow: var(--shadow); max-width: 800px; margin: 0 auto;
-        }
-        .form-group { display: flex; flex-direction: column; }
-        .form-group input, .form-group select, .form-group textarea { 
-            width: 100%; box-sizing: border-box; padding: 12px; 
-            border: 1px solid var(--border-color); border-radius: 6px; 
-        }
-        .full-width { grid-column: 1 / span 2; }
-        .form-group label { font-weight: bold; margin-bottom: 8px; }
-        .success-msg { text-align: center; color: #27ae60; font-weight: bold; }
-    </style>
 </head>
 <body>
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
     
     <div class="container">
-        <header>
-            <h1>Modifier : <?= htmlspecialchars($word['mot']) ?></h1>
+        <header class="admin-header" style="background:none; box-shadow:none; padding:0;">
+            <h1>Modifier le mot</h1>
+            <a href="admin.php" class="btn-primary">← Retour</a>
         </header>
 
         <?= $message ?>
@@ -101,8 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="form-group">
                 <label>Sous-famille (Rime)</label>
-                <select name="rime" id="rimeSelect" required>
-                    </select>
+                <select name="rime" id="rimeSelect" required></select>
             </div>
 
             <div class="form-group full-width">
@@ -111,18 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="full-width">
-                <button type="submit" style="width: 100%;">Mettre à jour le mot</button>
-                <p style="text-align: center; margin-top: 15px;">
-                    <a href="admin.php" style="color: var(--text-muted);">Retour au dashboard</a>
-                </p>
+                <button type="submit" class="btn-large">Mettre à jour le mot</button>
             </div>
         </form>
     </div>
 
     <script>
         const rimesData = <?= json_encode($familles) ?>;
-        const currentRime = "<?= $word['rime'] ?>"; // On récupère la rime actuelle
-        
+        const currentRime = "<?= $word['rime'] ?>";
         const familleSelect = document.getElementById('familleSelect');
         const rimeSelect = document.getElementById('rimeSelect');
 
@@ -131,21 +131,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (selectedFamille && rimesData[selectedFamille]) {
                 rimesData[selectedFamille].forEach(rime => {
                     const option = document.createElement('option');
-                    option.value = rime;
-                    option.textContent = rime;
+                    option.value = rime; option.textContent = rime;
                     if (rime === selectedRime) option.selected = true;
                     rimeSelect.appendChild(option);
                 });
             }
         }
 
-        // Initialisation au chargement
         updateRimes(familleSelect.value, currentRime);
-
-        // Changement dynamique
-        familleSelect.addEventListener('change', function() {
-            updateRimes(this.value);
-        });
+        familleSelect.addEventListener('change', function() { updateRimes(this.value); });
     </script>
 </body>
 </html>
