@@ -1,14 +1,13 @@
 <?php
 /**
- * GESTION DES UTILISATEURS (Réservé au Superadmin)
- * Permet de modifier les rôles et de supprimer des membres.
+ * GESTION DES UTILISATEURS (Superadmin uniquement)
+ * Avec Modale de confirmation Moderne
  */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
 
 Auth::init();
 
-// SÉCURITÉ : Seul le superadmin peut accéder à cette page
 if (!Auth::isLogged() || Auth::getRole() !== 'superadmin') {
     header('Location: admin.php');
     exit;
@@ -17,25 +16,9 @@ if (!Auth::isLogged() || Auth::getRole() !== 'superadmin') {
 $engine = new RhymeEngine();
 $db = $engine->getPDO();
 
-// 1. GESTION DU CHANGEMENT DE RÔLE
-if (isset($_POST['update_role'])) {
-    $userId = (int)$_POST['user_id'];
-    $newRole = $_POST['role'];
-    
-    // Empêcher le superadmin de se rétrograder lui-même par erreur s'il est seul
-    if ($userId !== Auth::getUserId()) {
-        $stmt = $db->prepare("UPDATE users SET role = ? WHERE id = ?");
-        $stmt->execute([$newRole, $userId]);
-        header('Location: manage_users.php?msg=role_updated');
-        exit;
-    }
-}
-
-// 2. GESTION DE LA SUPPRESSION
+// GESTION DE LA SUPPRESSION
 if (isset($_GET['delete'])) {
     $userId = (int)$_GET['delete'];
-    
-    // On ne peut pas se supprimer soi-même ici
     if ($userId !== Auth::getUserId()) {
         $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$userId]);
@@ -44,7 +27,6 @@ if (isset($_GET['delete'])) {
     }
 }
 
-// 3. RÉCUPÉRATION DE TOUS LES UTILISATEURS
 $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users ORDER BY role DESC, username ASC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -52,18 +34,47 @@ $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users OR
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des Membres - Admin</title>
+    <title>Membres - Dico Kabyle</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .role-select { padding: 5px; border-radius: 4px; border: 1px solid var(--border-color); }
-        .btn-update {
-            background: var(--primary-color);
-            color: white; border: none; padding: 6px 12px;
-            border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+        /* --- STYLE DE LA MODALE MODERNE --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); /* Fond grisé */
+            display: none; /* Caché par défaut */
+            align-items: center; justify-content: center;
+            z-index: 1000; backdrop-filter: blur(4px); /* Effet de flou moderne */
+            animation: fadeIn 0.3s ease;
         }
-        .badge-superadmin { background: #8e44ad !important; color: white; }
-        .badge-admin { background: #2980b9 !important; color: white; }
-        .badge-user { background: #95a5a6 !important; color: white; }
+
+        .modal-card {
+            background: white; width: 90%; max-width: 450px;
+            padding: 30px; border-radius: 16px; text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            transform: translateY(-20px); transition: 0.3s ease;
+        }
+
+        .modal-card h2 { margin-top: 0; color: #2c3e50; }
+        .modal-card p { color: #636e72; line-height: 1.6; margin: 20px 0; }
+        
+        .modal-icon { 
+            font-size: 3.5rem; margin-bottom: 15px; display: block; 
+        }
+
+        .modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 25px; }
+        
+        .btn-modal { 
+            padding: 12px 25px; border-radius: 8px; border: none; 
+            font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem;
+        }
+        
+        .btn-confirm { background: #d63031; color: white; } /* Rouge pour danger */
+        .btn-confirm.edit { background: var(--primary-color); } /* Bleu/Vert pour édition */
+        .btn-cancel { background: #dfe6e9; color: #2d3436; }
+        
+        .btn-modal:hover { opacity: 0.85; transform: translateY(-2px); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -72,19 +83,14 @@ $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users OR
     <div class="container">
         <div class="admin-header">
             <div>
-                <h1>Gestion des Utilisateurs</h1>
-                <p>Niveau d'accès : <strong>Superadmin</strong></p>
+                <h1>Membres du dictionnaire</h1>
+                <p>Gestionnaire de comptes sécurisé</p>
             </div>
             <a href="admin.php" class="btn-primary">← Dashboard</a>
         </div>
 
-        <?php if (isset($_GET['msg'])): ?>
-            <div class="error-box" style="background: var(--success-color); color: white; border: none;">
-                <?php
-                    if($_GET['msg'] === 'deleted') echo "Utilisateur supprimé.";
-                    if($_GET['msg'] === 'role_updated') echo "Rôle mis à jour avec succès.";
-                ?>
-            </div>
+        <?php if (isset($_GET['msg']) && $_GET['msg'] === 'deleted'): ?>
+            <p class="success-msg">✅ Utilisateur supprimé avec succès.</p>
         <?php endif; ?>
 
         <div class="table-container">
@@ -94,7 +100,6 @@ $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users OR
                         <th>Utilisateur</th>
                         <th>Email</th>
                         <th>Rôle</th>
-                        <th>Changer le Rôle</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -103,32 +108,21 @@ $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users OR
                     <tr>
                         <td>
                             <strong><?= htmlspecialchars($u['username']) ?></strong><br>
-                            <small><?= htmlspecialchars($u['prenom'] . ' ' . $u['nom']) ?></small>
+                            <small style="color: var(--text-muted);"><?= htmlspecialchars(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')) ?></small>
                         </td>
                         <td><?= htmlspecialchars($u['email']) ?></td>
-                        <td>
-                            <span class="badge badge-<?= $u['role'] ?>">
-                                <?= ucfirst($u['role']) ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php if ($u['id'] != Auth::getUserId()): ?>
-                                <form method="POST" style="display: flex; gap: 5px;">
-                                    <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                    <select name="role" class="role-select">
-                                        <option value="user" <?= $u['role'] === 'user' ? 'selected' : '' ?>>User</option>
-                                        <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                        <option value="superadmin" <?= $u['role'] === 'superadmin' ? 'selected' : '' ?>>Superadmin</option>
-                                    </select>
-                                    <button type="submit" name="update_role" class="btn-update">OK</button>
-                                </form>
-                            <?php else: ?>
-                                <small class="text-muted">Vous (Superadmin)</small>
-                            <?php endif; ?>
-                        </td>
+                        <td><span class="badge badge-<?= $u['role'] ?>"><?= ucfirst($u['role']) ?></span></td>
                         <td class="actions">
+                            <a href="#" 
+                               class="link-edit" 
+                               onclick="openModal('edit', '<?= $u['id'] ?>', '<?= htmlspecialchars($u['username']) ?>')">Modifier</a>
+                            
                             <?php if ($u['id'] != Auth::getUserId()): ?>
-                                <a href="manage_users.php?delete=<?= $u['id'] ?>" class="link-delete" onclick="return confirm('Bannir cet utilisateur ?')">Supprimer</a>
+                                <a href="#" 
+                                   class="link-delete" 
+                                   onclick="openModal('delete', '<?= $u['id'] ?>', '<?= htmlspecialchars($u['username']) ?>')">Supprimer</a>
+                            <?php else: ?>
+                                <small class="text-muted" style="font-style: italic;">(C'est vous)</small>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -137,5 +131,66 @@ $users = $db->query("SELECT id, username, email, role, prenom, nom FROM users OR
             </table>
         </div>
     </div>
+
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-card">
+            <span id="modalIcon" class="modal-icon">⚠️</span>
+            <h2 id="modalTitle">Confirmation</h2>
+            <p id="modalText">Voulez-vous vraiment effectuer cette action ?</p>
+            
+            <div class="modal-buttons">
+                <button class="btn-modal btn-cancel" onclick="closeModal()">Annuler</button>
+                <button id="confirmBtn" class="btn-modal btn-confirm">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalText = document.getElementById('modalText');
+        const modalIcon = document.getElementById('modalIcon');
+        const confirmBtn = document.getElementById('confirmBtn');
+
+        /**
+         * Ouvre la modale avec le contexte approprié
+         */
+        function openModal(type, id, username) {
+            modal.style.display = 'flex';
+            
+            if (type === 'delete') {
+                modalIcon.textContent = "🗑️";
+                modalTitle.textContent = "Suppression Définitive";
+                modalText.innerHTML = `Êtes-vous sûr de vouloir supprimer <strong>${username}</strong> ?<br><br>Cette opération est <strong>irréversible</strong> : toutes ses données de connexion seront effacées.`;
+                confirmBtn.textContent = "Supprimer l'utilisateur";
+                confirmBtn.className = "btn-modal btn-confirm";
+                confirmBtn.onclick = function() {
+                    window.location.href = `manage_users.php?delete=${id}`;
+                };
+            } 
+            else if (type === 'edit') {
+                modalIcon.textContent = "📝";
+                modalTitle.textContent = "Modifier le Profil";
+                modalText.innerHTML = `Vous allez entrer dans l'espace d'édition du compte de <strong>${username}</strong>.<br>Voulez-vous continuer ?`;
+                confirmBtn.textContent = "Aller à l'édition";
+                confirmBtn.className = "btn-modal btn-confirm edit";
+                confirmBtn.onclick = function() {
+                    window.location.href = `edit_user.php?id=${id}`;
+                };
+            }
+        }
+
+        /**
+         * Ferme la modale
+         */
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Fermer si on clique sur le fond grisé
+        window.onclick = function(event) {
+            if (event.target == modal) closeModal();
+        }
+    </script>
 </body>
 </html>

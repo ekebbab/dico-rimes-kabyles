@@ -1,22 +1,26 @@
 <?php
 /**
  * PAGE D'ÉDITION DE MOT
- * Sécurisée par rôle et auteur.
+ * Sécurisée par rôle et auteur via Auth::canManage.
  */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
 
 Auth::init();
-if (!Auth::isLogged()) { header('Location: login.php'); exit; }
 
+// Sécurité : Redirection si non connecté
+if (!Auth::isLogged()) { 
+    header('Location: login.php'); 
+    exit; 
+}
+
+$id = (int)($_GET['id'] ?? 0);
 $engine = new RhymeEngine();
 $admin = new AdminEngine($engine->getPDO());
 $message = "";
 
-$id = (int)($_GET['id'] ?? 0);
-
-// Récupération des données avec infos auteur pour la sécurité
+// 1. Récupération des données avec jointure auteur pour vérification des droits
 $stmt = $engine->getPDO()->prepare("
     SELECT r.*, u.role as author_role 
     FROM rimes r 
@@ -26,14 +30,18 @@ $stmt = $engine->getPDO()->prepare("
 $stmt->execute([$id]);
 $word = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if (!$word) { die("Mot non trouvé."); }
+// Si le mot n'existe pas
+if (!$word) { 
+    die("Erreur : Ce mot n'existe pas dans la base."); 
+}
 
-// VÉRIFICATION DES DROITS
+// 2. Vérification des permissions de modification
 if (!Auth::canManage($word['auteur_id'], $word['author_role'])) {
     header('Location: admin.php?msg=denied');
     exit;
 }
 
+// Configuration des familles de rimes
 $familles = [
     'B'=>['BA','BI','BU','AB','IB','UB','EB'], 'C'=>['CA','CI','CU','AC','IC','UC','EC'],
     'Č'=>['ČA','ČI','ČU','AČ','IČ','UČ','EČ'], 'D'=>['DA','DI','DU','AD','ID','UD','ED'],
@@ -51,6 +59,7 @@ $familles = [
     'Ž'=>['ŽA','ŽI','ŽU','AŽ','IŽ','UŽ','EŽ']
 ];
 
+// 3. Traitement de la mise à jour
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
         'mot'           => trim($_POST['mot']),
@@ -61,8 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     if ($admin->updateWord($id, $data)) {
-        $message = "<p class='success-msg'>✅ Modifications enregistrées !</p>";
-        // Recharger les données fraîches
+        $message = "<p class='success-msg'>✅ Modifications enregistrées avec succès !</p>";
+        // Actualisation des données locales pour l'affichage
         $stmt->execute([$id]);
         $word = $stmt->fetch(PDO::FETCH_ASSOC);
     }
@@ -79,14 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
     
     <div class="container">
-        <header class="admin-header" style="background:none; box-shadow:none; padding:0;">
-            <h1>Modifier le mot</h1>
+        <header class="admin-header">
+            <h1>Modifier la rime</h1>
             <a href="admin.php" class="btn-primary">← Retour</a>
         </header>
 
         <?= $message ?>
 
-        <form method="POST" class="admin-form">
+        <form method="POST" class="admin-form admin-grid">
             <div class="form-group">
                 <label>Mot</label>
                 <input type="text" name="mot" value="<?= htmlspecialchars($word['mot']) ?>" required>
@@ -115,31 +124,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="full-width">
-                <button type="submit" class="btn-large">Mettre à jour le mot</button>
+                <button type="submit" class="btn-submit btn-full">Mettre à jour le mot</button>
             </div>
         </form>
     </div>
 
     <script>
+        /**
+         * LOGIQUE DYNAMIQUE DES SELECTS
+         */
         const rimesData = <?= json_encode($familles) ?>;
-        const currentRime = "<?= $word['rime'] ?>";
+        const currentRime = "<?= $word['rime'] ?>"; // Rime stockée en BDD
         const familleSelect = document.getElementById('familleSelect');
         const rimeSelect = document.getElementById('rimeSelect');
 
+        // Fonction pour mettre à jour la liste des rimes selon la lettre choisie
         function updateRimes(selectedFamille, selectedRime = null) {
             rimeSelect.innerHTML = '<option value="">-- Choisir une rime --</option>';
             if (selectedFamille && rimesData[selectedFamille]) {
                 rimesData[selectedFamille].forEach(rime => {
                     const option = document.createElement('option');
-                    option.value = rime; option.textContent = rime;
+                    option.value = rime; 
+                    option.textContent = rime;
                     if (rime === selectedRime) option.selected = true;
                     rimeSelect.appendChild(option);
                 });
             }
         }
 
+        // 1. Initialisation au chargement de la page
         updateRimes(familleSelect.value, currentRime);
-        familleSelect.addEventListener('change', function() { updateRimes(this.value); });
+
+        // 2. Écouteur de changement sur la famille (lettre)
+        familleSelect.addEventListener('change', function() { 
+            updateRimes(this.value); 
+        });
     </script>
 </body>
 </html>
