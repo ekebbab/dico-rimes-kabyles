@@ -9,10 +9,7 @@
     --border-color: #dcdde1;
     --text-muted: #7f8c8d;
     --success-color: #27ae60;
-    --error-bg: #f8d7da;
-    --error-text: #721c24;
     --error-color: #e74c3c;
-    
     --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     --transition: all 0.3s ease;
 }
@@ -29,13 +26,13 @@ body {
 }
 
 .container { 
-    max-width: 1000px;
+    max-width: 1100px;
     margin: 0 auto; 
     padding: 20px; 
 }
 
 /* ==========================================================================
-   ENTÊTE & RECHERCHE
+   ENTÊTE & NAVIGATION
    ========================================================================== */
 header { 
     text-align: center; 
@@ -43,118 +40,20 @@ header {
     padding: 20px 0;
 }
 
-header h1 {
-    font-size: 2.5rem;
-    margin-bottom: 20px;
-}
-
-.search-form {
+.admin-header {
     display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-
-/* ==========================================================================
-   FORMULAIRES (GLOBAL)
-   ========================================================================== */
-.form-group {
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-}
-
-.form-group label {
-    font-weight: bold;
-    margin-bottom: 8px;
-    color: var(--primary-color);
-}
-
-input[type="text"], 
-input[type="password"], 
-select, 
-textarea { 
-    padding: 12px 20px; 
-    border: 1px solid var(--border-color); 
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    outline: none;
-    transition: var(--transition);
-    width: 100%;
-    box-sizing: border-box;
-}
-
-input:focus, select:focus, textarea:focus {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
-}
-
-/* ==========================================================================
-   COMPOSANTS (BOUTONS & BADGES)
-   ========================================================================== */
-button, .btn-pdf, .btn-add { 
-    padding: 12px 25px; 
-    background: var(--accent-color); 
-    color: white; 
-    border: none; 
-    border-radius: 25px; 
-    cursor: pointer; 
-    font-weight: bold;
-    box-shadow: var(--shadow);
-    transition: var(--transition);
-    text-decoration: none;
-    display: inline-block;
-    text-align: center;
-}
-
-button:hover, .btn-pdf:hover, .btn-add:hover {
-    background: #d35400;
-    transform: translateY(-2px);
-}
-
-.btn-add { background: var(--success-color); }
-.btn-add:hover { background: #219150; }
-
-.btn-logout { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; margin-left: 15px; }
-
-.btn-copy {
-    background: #f1f2f6;
-    color: var(--primary-color);
-    padding: 5px 10px;
-    font-size: 0.9rem;
-    border-radius: 8px;
-    box-shadow: none;
-    border: 1px solid var(--border-color);
-    width: auto;
-}
-
-.btn-copy.copied {
-    background: var(--success-color);
-    color: white;
-    border-color: var(--success-color);
-}
-
-/* ==========================================================================
-   ADMINISTRATION & CONNEXION
-   ========================================================================== */
-.login-wrapper {
-    display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    min-height: 60vh;
-}
-
-.login-card {
+    margin-bottom: 30px;
     background: var(--white);
-    padding: 40px;
+    padding: 20px;
     border-radius: 12px;
     box-shadow: var(--shadow);
-    width: 100%;
-    max-width: 400px;
-    border-top: 5px solid var(--accent-color);
 }
 
-.admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-
+/* ==========================================================================
+   FORMULAIRES & FILTRES AUTO-SUBMIT
+   ========================================================================== */
 .filter-card {
     background: var(--white);
     padding: 20px;
@@ -163,99 +62,90 @@ button:hover, .btn-pdf:hover, .btn-add:hover {
     box-shadow: var(--shadow);
 }
 
-.filter-form { display: flex; gap: 10px; flex-wrap: wrap; }
-.filter-form input { flex: 2; min-width: 200px; }
-.filter-form select { flex: 1; }
+.filter-form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
 
-.error-box {
-    background: var(--error-bg);
-    color: var(--error-text);
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 20px;
-    text-align: center;
+input[type="text"], select, textarea { 
+    padding: 10px 15px; 
+    border: 1px solid var(--border-color); 
+    border-radius: 8px;
+    outline: none;
+    transition: var(--transition);
+}
+
+input[type="text"] { flex: 2; min-width: 200px; }
+select { flex: 1; min-width: 120px; cursor: pointer; }
+
+/* ==========================================================================
+   BOUTONS (SOBRES)
+   ========================================================================== */
+.btn-add, .btn-primary { 
+    background: var(--primary-color);
+    color: white; 
+    padding: 10px 20px;
+    border: none; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    font-weight: 500;
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.btn-add:hover { background: #34495e; }
+
+.btn-logout { 
+    color: var(--error-color); 
+    text-decoration: none; 
     font-size: 0.9rem;
-    border-left: 4px solid #f5c6cb;
+    font-weight: bold;
 }
-
-.admin-form { 
-    display: grid; 
-    grid-template-columns: 1fr 1fr; 
-    gap: 25px; 
-    background: var(--white); 
-    padding: 30px; 
-    border-radius: 12px; 
-    box-shadow: var(--shadow);
-}
-
-.full-width { grid-column: 1 / span 2; }
 
 /* ==========================================================================
    TABLEAUX (ADMIN)
    ========================================================================== */
-.table-container { background: var(--white); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
-.styled-table { width: 100%; border-collapse: collapse; }
-.styled-table thead tr { background: var(--primary-color); color: white; text-align: left; }
-.styled-table th, .styled-table td { padding: 15px 20px; border-bottom: 1px solid #eee; }
-.styled-table tbody tr:hover { background-color: #f9f9f9; }
+.table-container {
+    background: var(--white);
+    border-radius: 12px;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+}
+
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.styled-table thead tr {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #edf0f2;
+    text-align: left;
+}
+
+.styled-table th, .styled-table td { padding: 15px 20px; }
+.styled-table tbody tr:hover { background-color: #fcfcfc; }
 
 .badge {
-    display: inline-block;
-    background: #fdf2e9;
-    color: var(--accent-color);
-    padding: 2px 12px;
-    border-radius: 20px;
+    background: #f1f3f5;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 0.85rem;
     font-weight: bold;
 }
 
 .bold { font-weight: bold; }
-.actions { display: flex; gap: 10px; }
-.link-edit { color: #3498db; text-decoration: none; }
-.link-delete { color: var(--error-color); text-decoration: none; font-weight: bold; }
+.actions a { text-decoration: none; margin-right: 10px; font-size: 0.9rem; }
+.link-edit { color: #3498db; }
+.link-delete { color: var(--error-color); font-weight: bold; }
 
 /* ==========================================================================
-   RÉSULTATS (CARDS PUBLIQUES)
+   RESPONSIVE
    ========================================================================== */
-.grid { 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-    gap: 25px; 
-}
-
-.card { 
-    background: var(--white); 
-    padding: 20px; 
-    border-radius: 12px; 
-    box-shadow: var(--shadow); 
-    transition: var(--transition);
-    border-top: 4px solid var(--accent-color);
-    animation: fadeIn 0.4s ease-in-out;
-}
-
-.card:hover { transform: translateY(-5px); }
-
-.card .rime {
-    /* Hérite du style .badge ou défini localement */
-    display: inline-block;
-    background: #fdf2e9;
-    color: var(--accent-color);
-    padding: 2px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: bold;
-}
-
-/* ==========================================================================
-   ANIMATIONS & RESPONSIVE
-   ========================================================================== */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@media (max-width: 600px) {
-    .search-form, .admin-form, .filter-form { flex-direction: column; display: block; }
-    input[type="text"], select, button { width: 100%; margin-bottom: 10px; }
-    .admin-header { flex-direction: column; text-align: center; gap: 15px; }
+@media (max-width: 768px) {
+    .filter-form { flex-direction: column; }
+    input[type="text"], select { width: 100%; }
+    .admin-header { flex-direction: column; gap: 15px; text-align: center; }
 }
