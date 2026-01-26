@@ -1,28 +1,20 @@
 <?php
-/**
- * CONTRÔLEUR PAGE D'ACCUEIL
- * Gère l'affichage public du dictionnaire.
- */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 
 $engine = new RhymeEngine();
 
-// Récupération et nettoyage des paramètres de recherche
+// Paramètres étendus pour les 3 colonnes
 $params = [
-    'q'     => $_GET['q'] ?? '',
-    'sort'  => $_GET['sort'] ?? 'created_at', 
-    'order' => $_GET['order'] ?? 'desc',
-    'limit' => $_GET['limit'] ?? '20'
+    'q'            => $_GET['q'] ?? '',
+    'type'         => $_GET['type'] ?? 'all',
+    'famille'      => $_GET['famille'] ?? '',
+    'sous_famille' => $_GET['sous_famille'] ?? '',
+    'sort'         => $_GET['sort'] ?? 'mot', // Changé par défaut en 'mot' pour le dictionnaire
+    'order'        => $_GET['order'] ?? 'asc',
+    'limit'        => $_GET['limit'] ?? '50'
 ];
 
-/**
- * Note : searchQuery est utilisée dans home.php pour pré-remplir 
- * le champ de recherche dans le header/hero.
- */
 $searchQuery = htmlspecialchars($params['q']); 
-
-// Exécution de la recherche avancée via le moteur SQLite
 $results = $engine->searchAdvanced($params);
 
-// Inclusion de la vue finale (S'assurer que src/views/home.php existe)
 include __DIR__ . '/../src/views/home.php';

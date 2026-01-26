@@ -1,8 +1,7 @@
 <?php
 /**
- * DASHBOARD ADMINISTRATEUR - VERSION AVANCÉE
- * Gestion des rimes avec filtrage automatique, sécurité par rôles et variantes.
- * Intègre l'agent de communication moderne (Modale de confirmation).
+ * DASHBOARD ADMINISTRATEUR - VERSION LINGUISTIQUE AVANCÉE
+ * Gestion des rimes, variantes et export PDF synchronisé.
  */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
@@ -10,10 +9,9 @@ require_once __DIR__ . '/../src/Auth.php';
 
 Auth::init();
 
-// CORRECTION : On instancie l'engine AVANT l'appel à Auth::isLogged()
 $engine = new RhymeEngine();
 
-// Sécurité : Redirection vers login si non connecté (le tracking last_seen fonctionne maintenant)
+// Sécurité : Redirection si non connecté
 if (!Auth::isLogged($engine->getPDO())) { 
     header('Location: login.php'); 
     exit; 
@@ -36,7 +34,6 @@ if (isset($_GET['delete'])) {
     $info = $stmt->fetch();
 
     if ($info && Auth::canManage($info['auteur_id'], $info['author_role'])) {
-        // L'appel à deleteWord gère maintenant la renumérotation des variantes
         $admin->deleteWord($id);
         header('Location: admin.php?msg=deleted');
     } else {
@@ -45,37 +42,16 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// Paramètres de filtrage et tri
+// Paramètres de filtrage et tri (Alignés sur RhymeEngine)
 $params = [
     'q'     => $_GET['q'] ?? '',
-    'sort'  => $_GET['sort'] ?? 'created_at',
+    'sort'  => $_GET['sort'] ?? 'updated_at',
     'order' => $_GET['order'] ?? 'desc',
     'limit' => $_GET['limit'] ?? '50'
 ];
 
-$sql = "SELECT r.*, u.username as auteur_nom, u.role as author_role 
-        FROM rimes r 
-        LEFT JOIN users u ON r.auteur_id = u.id 
-        WHERE 1=1";
-
-$binds = [];
-if (!empty($params['q'])) {
-    $sql .= " AND (r.mot LIKE :q OR r.rime LIKE :q OR r.signification LIKE :q)";
-    $binds['q'] = '%' . $params['q'] . '%';
-}
-
-$allowedSort = ['mot', 'rime', 'created_at'];
-$sort = in_array($params['sort'], $allowedSort) ? "r.".$params['sort'] : "r.created_at";
-$order = (isset($params['order']) && strtolower($params['order']) === 'asc') ? 'ASC' : 'DESC';
-$sql .= " ORDER BY $sort $order";
-
-if ($params['limit'] !== 'all') {
-    $sql .= " LIMIT " . (int)$params['limit'];
-}
-
-$stmt = $engine->getPDO()->prepare($sql);
-$stmt->execute($binds);
-$words = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Appel du moteur de recherche pour récupérer les données triées
+$words = $engine->searchAdvanced($params);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -91,6 +67,11 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: normal;
             margin-left: 6px;
             font-style: italic;
+        }
+
+        .meta-info {
+            font-size: 0.8rem;
+            color: var(--text-muted);
         }
 
         /* --- STYLE DE LA MODALE MODERNE --- */
@@ -120,11 +101,21 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem;
         }
         
-        .btn-confirm { background: #e74c3c; color: white; } /* Rouge Danger */
-        .btn-confirm.edit { background: var(--primary-color); } /* Couleur site pour Edition */
+        .btn-confirm { background: #e74c3c; color: white; } 
+        .btn-confirm.edit { background: var(--primary-color); } 
         .btn-cancel { background: #dfe6e9; color: #2d3436; }
         
         .btn-modal:hover { opacity: 0.85; transform: translateY(-2px); }
+
+        .export-card {
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 30px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 1px solid #eee;
+        }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
@@ -135,8 +126,8 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="container">
         <div class="admin-header">
             <div>
-                <h1>Gestion des Rimes</h1>
-                <p>Rôle : <span class="badge"><?= ucfirst(Auth::getRole()) ?></span></p>
+                <h1>Gestion du Dictionnaire</h1>
+                <p>Session : <span class="badge"><?= ucfirst(Auth::getRole()) ?></span></p>
             </div>
             <div class="admin-actions">
                 <a href="add_word.php" class="btn-add">+ Nouveau Mot</a>
@@ -148,27 +139,26 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="filter-card">
             <form method="GET" class="filter-form" id="autoFilterForm">
-                <input type="text" name="q" placeholder="Rechercher..." value="<?= htmlspecialchars($params['q']) ?>">
+                <input type="text" name="q" placeholder="Rechercher mot, sens..." value="<?= htmlspecialchars($params['q']) ?>">
                 
                 <select name="sort">
-                    <option value="created_at" <?= $params['sort'] == 'created_at' ? 'selected' : '' ?>>Date</option>
-                    <option value="mot" <?= $params['sort'] == 'mot' ? 'selected' : '' ?>>Mot</option>
+                    <option value="updated_at" <?= $params['sort'] == 'updated_at' ? 'selected' : '' ?>>Date Modif.</option>
+                    <option value="mot" <?= $params['sort'] == 'mot' ? 'selected' : '' ?>>Ordre Alphabétique</option>
+                    <option value="lettre" <?= $params['sort'] == 'lettre' ? 'selected' : '' ?>>Lettre Pivot</option>
                     <option value="rime" <?= $params['sort'] == 'rime' ? 'selected' : '' ?>>Rime</option>
                 </select>
 
                 <select name="order">
-                    <option value="desc" <?= $params['order'] == 'desc' ? 'selected' : '' ?>>Décroissant</option>
-                    <option value="asc" <?= $params['order'] == 'asc' ? 'selected' : '' ?>>Croissant</option>
+                    <option value="DESC" <?= $params['order'] == 'DESC' ? 'selected' : '' ?>>Décroissant ↓</option>
+                    <option value="ASC" <?= $params['order'] == 'ASC' ? 'selected' : '' ?>>Croissant ↑</option>
                 </select>
 
                 <select name="limit">
-                    <option value="5" <?= $params['limit'] == '5' ? 'selected' : '' ?>>5 lignes</option>
                     <option value="10" <?= $params['limit'] == '10' ? 'selected' : '' ?>>10 lignes</option>
-                    <option value="20" <?= $params['limit'] == '20' ? 'selected' : '' ?>>20 lignes</option>
                     <option value="50" <?= $params['limit'] == '50' ? 'selected' : '' ?>>50 lignes</option>
                     <option value="100" <?= $params['limit'] == '100' ? 'selected' : '' ?>>100 lignes</option>
                     <option value="500" <?= $params['limit'] == '500' ? 'selected' : '' ?>>500 lignes</option>
-                    <option value="all" <?= $params['limit'] == 'all' ? 'selected' : '' ?>>Tout</option>
+                    <option value="all" <?= $params['limit'] == 'all' ? 'selected' : '' ?>>Tout afficher</option>
                 </select>
             </form>
         </div>
@@ -177,33 +167,42 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <table class="styled-table">
                 <thead>
                     <tr>
-                        <th>Mot</th>
-                        <th>Rime</th>
-                        <th>Auteur</th>
+                        <th>Mot & Grammaire</th>
+                        <th>Phonétique</th>
+                        <th>Signification</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($words)): ?>
-                        <tr><td colspan="4" style="text-align:center;">Aucune rime trouvée.</td></tr>
+                        <tr><td colspan="4" style="text-align:center; padding: 30px;">Aucune donnée ne correspond à vos filtres.</td></tr>
                     <?php else: ?>
                         <?php foreach ($words as $word): ?>
                         <tr>
-                            <td class="bold">
-                                <?= htmlspecialchars($word['mot']) ?>
-                                <?php if($word['variante'] > 1): ?>
-                                    <span class="badge-variante">(v<?= $word['variante'] ?>)</span>
-                                <?php endif; ?>
+                            <td>
+                                <div class="bold">
+                                    <?= htmlspecialchars($word['mot']) ?>
+                                    <?php if($word['variante'] > 1): ?>
+                                        <span class="badge-variante">(v<?= $word['variante'] ?>)</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="meta-info">
+                                    <?= htmlspecialchars($word['classe_grammaticale']) ?> 
+                                    (<?= htmlspecialchars($word['genre']) ?> / <?= htmlspecialchars($word['nombre']) ?>)
+                                </div>
                             </td>
-                            <td><span class="badge"><?= htmlspecialchars($word['rime']) ?></span></td>
-                            <td><small><?= htmlspecialchars($word['auteur_nom'] ?? 'Inconnu') ?></small></td>
+                            <td>
+                                <span class="badge">L: <?= htmlspecialchars($word['lettre']) ?></span><br>
+                                <span class="badge badge-info">R: <?= htmlspecialchars($word['rime']) ?></span>
+                            </td>
+                            <td>
+                                <div style="max-width: 300px; font-size: 0.9rem;">
+                                    <?= mb_strimwidth(htmlspecialchars($word['signification']), 0, 80, "...") ?>
+                                </div>
+                            </td>
                             <td class="actions">
-                                <?php if (Auth::canManage($word['auteur_id'], $word['author_role'])): ?>
-                                    <a href="#" class="link-edit" onclick="openModal('edit', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Modifier</a>
-                                    <a href="#" class="link-delete" onclick="openModal('delete', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Supprimer</a>
-                                <?php else: ?>
-                                    <span class="text-muted" style="font-size: 0.8rem;">Lecture seule</span>
-                                <?php endif; ?>
+                                <a href="#" class="link-edit" onclick="openModal('edit', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Modifier</a>
+                                <a href="#" class="link-delete" onclick="openModal('delete', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Supprimer</a>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -211,7 +210,16 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </tbody>
             </table>
         </div>
-    </div>
+
+        <div class="export-card">
+            <h3>Exportation du Catalogue</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">Générez un document PDF professionnel basé sur la structure linguistique actuelle.</p>
+            <a href="export_pdf.php?<?= http_build_query($params) ?>" class="btn-primary" target="_blank" style="background:#e67e22; border:none; padding:12px 25px; text-decoration: none; display: inline-block; border-radius: 8px; color: white; font-weight: bold;">
+                📥 Télécharger le Catalogue PDF
+            </a>
+        </div>
+
+    </div> 
 
     <div id="customModal" class="modal-overlay">
         <div class="modal-card">
@@ -233,17 +241,14 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const modalIcon = document.getElementById('modalIcon');
         const confirmBtn = document.getElementById('confirmBtn');
 
-        /**
-         * Ouvre la modale avec le descriptif correspondant
-         */
         function openModal(type, id, word) {
             modal.style.display = 'flex';
             
             if (type === 'delete') {
                 modalIcon.textContent = "🗑️";
-                modalTitle.textContent = "Supprimer la rime";
-                modalText.innerHTML = `Vous êtes sur le point de supprimer définitivement le mot <strong>"${word}"</strong>.<br><br>Cette opération est <strong>irréversible</strong>. Les variantes suivantes seront automatiquement renumérotées pour maintenir la cohérence du dictionnaire.`;
-                confirmBtn.textContent = "Supprimer la rime";
+                modalTitle.textContent = "Supprimer l'entrée";
+                modalText.innerHTML = `Voulez-vous supprimer définitivement <strong>"${word}"</strong> ?<br>Les variantes seront réorganisées automatiquement.`;
+                confirmBtn.textContent = "Confirmer la suppression";
                 confirmBtn.className = "btn-modal btn-confirm";
                 confirmBtn.onclick = function() {
                     window.location.href = `admin.php?delete=${id}`;
@@ -252,8 +257,8 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
             else if (type === 'edit') {
                 modalIcon.textContent = "✏️";
                 modalTitle.textContent = "Modifier l'entrée";
-                modalText.innerHTML = `Souhaitez-vous ouvrir l'éditeur pour modifier les informations liées au mot <strong>"${word}"</strong> ?`;
-                confirmBtn.textContent = "Ouvrir l'éditeur";
+                modalText.innerHTML = `Ouvrir l'éditeur pour le mot <strong>"${word}"</strong> ?`;
+                confirmBtn.textContent = "Éditer";
                 confirmBtn.className = "btn-modal btn-confirm edit";
                 confirmBtn.onclick = function() {
                     window.location.href = `edit_word.php?id=${id}`;
@@ -265,12 +270,11 @@ $words = $stmt->fetchAll(PDO::FETCH_ASSOC);
             modal.style.display = 'none';
         }
 
-        // Fermer la modale si on clique à l'extérieur de la carte
         window.onclick = function(event) {
             if (event.target == modal) closeModal();
         }
 
-        // Auto-soumission des filtres
+        // Auto-soumission des filtres lors du changement des sélecteurs
         document.querySelectorAll('#autoFilterForm select').forEach(select => {
             select.addEventListener('change', () => {
                 document.getElementById('autoFilterForm').submit();
