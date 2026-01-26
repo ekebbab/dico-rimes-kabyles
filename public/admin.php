@@ -10,13 +10,15 @@ require_once __DIR__ . '/../src/Auth.php';
 
 Auth::init();
 
-// Sécurité : Redirection vers login si non connecté
-if (!Auth::isLogged()) {
-    header('Location: login.php');
-    exit;
+// CORRECTION : On instancie l'engine AVANT l'appel à Auth::isLogged()
+$engine = new RhymeEngine();
+
+// Sécurité : Redirection vers login si non connecté (le tracking last_seen fonctionne maintenant)
+if (!Auth::isLogged($engine->getPDO())) { 
+    header('Location: login.php'); 
+    exit; 
 }
 
-$engine = new RhymeEngine();
 $admin = new AdminEngine($engine->getPDO());
 
 // --- LOGIQUE DE SUPPRESSION SÉCURISÉE ---

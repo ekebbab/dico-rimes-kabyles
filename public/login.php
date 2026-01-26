@@ -1,7 +1,7 @@
 <?php
 /**
  * PAGE DE CONNEXION
- * Gère l'authentification et l'initialisation des droits (rôles).
+ * Gère l'authentification, la vérification de l'activation du compte et l'initialisation des sessions.
  */
 require_once __DIR__ . '/../src/Auth.php';
 require_once __DIR__ . '/../src/RhymeEngine.php';
@@ -26,20 +26,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $engine = new RhymeEngine();
         $db = $engine->getPDO();
 
-        // Récupération de l'utilisateur
-        $stmt = $db->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
+        // Récupération de l'utilisateur (On vérifie aussi is_active)
+        $stmt = $db->prepare("SELECT id, username, password, role, is_active FROM users WHERE username = ?");
         $stmt->execute([$username]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Vérification du mot de passe (haché)
+        // Vérification du mot de passe
         if ($user && password_verify($password, $user['password'])) {
-            // Stockage des informations cruciales en session
-            $_SESSION['user_id']  = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role']     = $user['role']; 
+            
+            // SÉCURITÉ : Vérifier si le compte est actif
+            if ((int)$user['is_active'] !== 1) {
+                $error = "votre compte est en attente de validation par un administrateur.";
+            } else {
+                // Stockage des informations en session
+                $_SESSION['user_id']  = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['role']     = $user['role']; 
 
-            header('Location: admin.php');
-            exit;
+                header('Location: admin.php');
+                exit;
+            }
         } else {
             $error = "Identifiants incorrects.";
         }
@@ -54,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Connexion - Dico Kabyle</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* Conteneur pour aligner l'oeil dans le champ */
         .password-wrapper {
             position: relative;
             display: flex;
@@ -75,9 +80,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--accent-color);
         }
 
-        /* Ajustement du padding pour ne pas écrire sur l'oeil */
         #password {
             padding-right: 45px;
+        }
+
+        .register-link {
+            display: block;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        .register-link:hover {
+            color: var(--accent-color);
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -114,8 +132,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <button type="submit" class="btn-full">Se connecter</button>
             </form>
 
-            <footer style="margin-top: 20px; text-align: center;">
-                <a href="index.php" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">
+            <footer style="margin-top: 25px; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">Pas encore de compte ?</p>
+                <a href="register.php" class="register-link">✨ Rejoindre la Team (S'inscrire)</a>
+                
+                <a href="index.php" style="color: var(--text-muted); text-decoration: none; font-size: 0.85rem; display: block; margin-top: 10px;">
                     ← Retour au dictionnaire
                 </a>
             </footer>
@@ -123,18 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </main>
 
     <script>
-        /**
-         * Logique d'interrupteur pour afficher/cacher le mot de passe
-         */
         const passwordInput = document.getElementById('password');
         const toggleIcon = document.getElementById('togglePassword');
 
         toggleIcon.addEventListener('click', function() {
-            // Basculer le type d'input
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);
-            
-            // Basculer l'icône
             this.textContent = type === 'password' ? '👁️' : '🙈';
         });
     </script>

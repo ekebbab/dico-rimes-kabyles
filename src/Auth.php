@@ -1,7 +1,7 @@
 <?php
 /**
  * CLASSE Auth
- * Gère l'authentification, la déconnexion et les rôles.
+ * Gère l'authentification, la déconnexion, les rôles et le tracking d'activité.
  */
 
 class Auth {
@@ -15,11 +15,27 @@ class Auth {
     }
 
     /**
-     * Vérifie si l'utilisateur est connecté
+     * Vérifie si l'utilisateur est connecté.
+     * Si une instance PDO est fournie, met à jour le champ 'last_seen'.
      */
-    public static function isLogged() {
+    public static function isLogged($db = null) {
         self::init();
-        return isset($_SESSION['user_id']);
+        
+        if (isset($_SESSION['user_id'])) {
+            // Si on a la connexion à la base, on marque l'utilisateur comme "vu"
+            if ($db instanceof PDO) {
+                try {
+                    $stmt = $db->prepare("UPDATE users SET last_seen = datetime('now') WHERE id = ?");
+                    $stmt->execute([$_SESSION['user_id']]);
+                } catch (PDOException $e) {
+                    // On échoue silencieusement pour ne pas bloquer l'utilisateur si la colonne n'existe pas encore
+                    error_log("Erreur tracking last_seen : " . $e->getMessage());
+                }
+            }
+            return true;
+        }
+        
+        return false;
     }
 
     /**
@@ -56,8 +72,13 @@ class Auth {
         $myId = self::getUserId();
         $myRole = self::getRole();
 
+        // 1. Un superadmin peut tout gérer
         if ($myRole === 'superadmin') return true;
+        
+        // 2. Un admin peut gérer tout sauf les superadmins
         if ($myRole === 'admin') return ($author_role !== 'superadmin');
+        
+        // 3. Un utilisateur classique ne gère que ses propres contenus
         if ($myRole === 'user') return ($myId == $author_id);
 
         return false;
