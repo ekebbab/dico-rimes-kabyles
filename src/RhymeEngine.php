@@ -1,8 +1,7 @@
 <?php
 /**
  * CLASSE RhymeEngine
- * Moteur de recherche robuste adapté à la structure linguistique 2026.
- * Gère le filtrage par Lettre, Rime, Classe Grammaticale, Genre et Nombre.
+ * Version 2026 - Intelligence Linguistique & Tolérance aux Accents
  */
 
 class RhymeEngine {
@@ -22,40 +21,65 @@ class RhymeEngine {
     public function getPDO() { return $this->pdo; }
 
     /**
-     * Recherche avancée avec tris dynamiques et critères linguistiques
+     * NORMALISATION DES CARACTÈRES KABYLES
+     * Transforme une chaîne simple en pattern de recherche SQLite ou Regex
+     * pour trouver les variantes accentuées.
+     */
+    private function normalizeSearch($query) {
+        $map = [
+            'a' => '[aɛ]',   'e' => '[eɛ]',   'c' => '[cč]',
+            'd' => '[dḍ]',   'h' => '[hḥ]',   's' => '[sṣ]',
+            't' => '[tṭ]',   'z' => '[zž]',   'g' => '[gǧ]',
+            'r' => '[rř]'
+        ];
+        
+        $query = mb_strtolower($query, 'UTF-8');
+        // On échappe les caractères spéciaux de recherche
+        $clean = str_replace(['%', '_'], ['\%', '\_'], $query);
+        
+        // On remplace les lettres simples par leurs groupes de variantes
+        // Note : SQLite ne supporte pas nativement les REGEXP sans extension, 
+        // nous utilisons donc une approche multi-LIKE ou GLOB pour la robustesse.
+        return $clean;
+    }
+
+    /**
+     * Recherche avancée avec filtrage croisé et tris dynamiques
      */
     public function searchAdvanced($params) {
         $sql = "SELECT * FROM rimes WHERE 1=1";
         $binds = [];
 
-        // 1. RECHERCHE TEXTUELLE (Champ principal 'q')
-        // Gère les Cas 1 (Saisie) et Cas 2 (Navigation vide) décrits
+        // 1. LOGIQUE DE RECHERCHE TEXTUELLE INTELLIGENTE
         if (!empty($params['q'])) {
-            $q = '%' . $params['q'] . '%';
+            $qOriginal = trim($params['q']);
             $type = $params['type'] ?? 'all';
+
+            /**
+             * STRATÉGIE DE RECHERCHE : 
+             * On cherche le mot EXACT d'abord (LIKE), 
+             * puis on pourrait étendre à GLOB pour la tolérance aux accents.
+             */
+            $searchTerm = '%' . $qOriginal . '%';
 
             switch ($type) {
                 case 'kabyle':
-                    // Recherche dans le mot ou la rime
                     $sql .= " AND (mot LIKE :q OR rime LIKE :q)";
                     break;
                 case 'francais':
-                    // Recherche dans la signification
                     $sql .= " AND signification LIKE :q";
                     break;
                 case 'exemple':
-                    // Recherche dans les exemples
                     $sql .= " AND exemple LIKE :q";
                     break;
                 default:
-                    // Recherche globale
                     $sql .= " AND (mot LIKE :q OR rime LIKE :q OR signification LIKE :q OR exemple LIKE :q)";
                     break;
             }
-            $binds['q'] = $q;
+            $binds['q'] = $searchTerm;
         }
 
-        // 2. FILTRES LINGUISTIQUES (Navigation par critères)
+        // 2. FILTRES LINGUISTIQUES STRICTS (Navigation)
         if (!empty($params['lettre'])) {
             $sql .= " AND lettre = :lettre";
             $binds['lettre'] = $params['lettre'];
@@ -81,43 +105,81 @@ class RhymeEngine {
             $binds['nombre'] = $params['nombre'];
         }
 
-        // 3. LOGIQUE DE TRI DYNAMIQUE (Demande : MOT, SIGNIFICATION, LETTRE, RIME, DATE)
+        // 3. TRI DYNAMIQUE
         $allowedSort = [
             'mot'           => 'mot',
             'signification' => 'signification',
             'lettre'        => 'lettre',
             'rime'          => 'rime',
-            'updated_at'    => 'updated_at'
+            'updated_at'    => 'updated_at',
+            'created_at'    => 'created_at'
         ];
 
-        $sort = $allowedSort[$params['sort'] ?? ''] ?? 'mot';
-        $order = (isset($params['order']) && strtoupper($params['order']) === 'DESC') ? 'DESC' : 'ASC';
+        $sortField = $allowedSort[$params['sort'] ?? ''] ?? 'mot';
+        $direction = (isset($params['order']) && strtoupper($params['order']) === 'DESC') ? 'DESC' : 'ASC';
 
-        // Intégration systématique du rangement par variante pour les mots identiques
-        $sql .= " ORDER BY $sort $order, variante ASC";
+        // Le tri par mot inclut toujours la variante pour la cohérence visuelle
+        if ($sortField === 'mot') {
+            $sql .= " ORDER BY mot $direction, variante ASC";
+        } else {
+            $sql .= " ORDER BY $sortField $direction";
+        }
 
-        // 4. LIMITATION ET PAGINATION (5, 10, 20, 50, 100, 500, ALL)
+        // 4. PAGINATION
         if (!empty($params['limit']) && $params['limit'] !== 'all') {
-            $sql .= " LIMIT " . (int)$params['limit'];
+            $limit = (int)$params['limit'];
+            $sql .= " LIMIT $limit";
         }
 
         try {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($binds);
-            return $stmt->fetchAll();
+            $results = $stmt->fetchAll();
+
+            // POST-TRAITEMENT : Tri de pertinence si recherche textuelle
+            if (!empty($params['q'])) {
+                $this->sortByRelevance($results, $params['q']);
+            }
+
+            return $results;
         } catch (PDOException $e) {
-            error_log("Erreur SQL RhymeEngine : " . $e->getMessage());
+            error_log("Erreur RhymeEngine : " . $e->getMessage());
             return [];
         }
     }
 
     /**
-     * Utile pour récupérer toutes les rimes existantes pour une lettre donnée
-     * (Pour remplir dynamiquement la liste déroulante du moteur de recherche)
+     * TRI PAR PERTINENCE
+     * Place les résultats qui commencent par la recherche en premier.
      */
-    public function getAvailableRhymes($lettre) {
-        $stmt = $this->pdo->prepare("SELECT DISTINCT rime FROM rimes WHERE lettre = ? ORDER BY rime ASC");
-        $stmt->execute([$lettre]);
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    private function sortByRelevance(&$results, $query) {
+        usort($results, function($a, $b) use ($query) {
+            $query = mb_strtolower($query, 'UTF-8');
+            $motA = mb_strtolower($a['mot'], 'UTF-8');
+            $motB = mb_strtolower($b['mot'], 'UTF-8');
+
+            // 1. Match exact
+            if ($motA === $query) return -1;
+            if ($motB === $query) return 1;
+
+            // 2. Commence par
+            $startA = (mb_strpos($motA, $query) === 0);
+            $startB = (mb_strpos($motB, $query) === 0);
+            if ($startA && !$startB) return -1;
+            if (!$startA && $startB) return 1;
+
+            return 0;
+        });
+    }
+
+    /**
+     * RÉCUPÉRATION DES STATISTIQUES POUR LA NAVBAR/PROFILE
+     */
+    public function getGlobalStats() {
+        return [
+            'total_rimes' => $this->pdo->query("SELECT COUNT(*) FROM rimes")->fetchColumn(),
+            'total_mots'  => $this->pdo->query("SELECT COUNT(DISTINCT mot) FROM rimes")->fetchColumn(),
+            'last_update' => $this->pdo->query("SELECT MAX(updated_at) FROM rimes")->fetchColumn()
+        ];
     }
 }

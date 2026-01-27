@@ -1,197 +1,233 @@
 <?php
 /**
- * PAGE DE PROFIL UTILISATEUR - VERSION FINALE SÉCURISÉE
- * Gestion des infos, double mot de passe, statistiques réelles et agent de communication.
+ * MON PROFIL - VERSION DESIGN OPTIMISÉE
+ * Intègre les retours sur les boutons et les styles de champs.
  */
+require_once __DIR__ . '/../src/Auth.php';
+Auth::init();
+
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
-require_once __DIR__ . '/../src/Auth.php';
-
-Auth::init();
 
 $engine = new RhymeEngine();
 $db = $engine->getPDO();
 
-// Sécurité : Tracking last_seen via Auth
-if (!Auth::isLogged($db)) { 
-    header('Location: login.php'); 
-    exit; 
+if (!Auth::isLogged($db)) {
+    header('Location: login.php');
+    exit;
 }
 
 $admin = new AdminEngine($db);
 $userId = Auth::getUserId();
+$user = $admin->getUserById($userId);
 $message = "";
 
-// 1. TRAITEMENT DU FORMULAIRE DE MISE À JOUR
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $prenom = trim($_POST['prenom'] ?? '');
-    $nom    = trim($_POST['nom'] ?? '');
-    $email  = trim($_POST['email'] ?? '');
-    $current_pass = $_POST['current_password'] ?? '';
-    $new_pass     = $_POST['new_password'] ?? '';
+    $data = [
+        'prenom'   => trim($_POST['prenom']),
+        'nom'      => trim($_POST['nom']),
+        'email'    => trim($_POST['email']),
+        'password' => $_POST['new_password']
+    ];
 
-    // Validation des champs obligatoires (Prénom, Nom, Email)
-    if (empty($prenom) || empty($nom) || empty($email)) {
-        $message = "<p class='error-msg'>❌ Tous les champs (Prénom, Nom, Email) doivent être renseignés.</p>";
+    if ($admin->updateUser($userId, $data)) {
+        $message = "<p class='success-msg'>✅ Tifrat! Profil mis à jour avec succès.</p>";
+        $user = $admin->getUserById($userId);
     } else {
-        $user_data = $admin->getUserById($userId);
-        $can_update = true;
-
-        // LOGIQUE MOT DE PASSE : Si on veut changer de mot de passe
-        if (!empty($new_pass)) {
-            if (empty($current_pass)) {
-                $message = "<p class='error-msg'>❌ Vous devez saisir votre mot de passe actuel pour en définir un nouveau.</p>";
-                $can_update = false;
-            } elseif (!password_verify($current_pass, $user_data['password'])) {
-                $message = "<p class='error-msg'>❌ Le mot de passe actuel saisi est incorrect.</p>";
-                $can_update = false;
-            }
-        }
-
-        if ($can_update) {
-            $data = [
-                'prenom'   => $prenom,
-                'nom'      => $nom,
-                'email'    => $email,
-                'password' => $new_pass // AdminEngine gérera le hachage si non vide
-            ];
-
-            if ($admin->updateUser($userId, $data)) {
-                $message = "<p class='success-msg'>✅ Votre profil a été mis à jour avec succès !</p>";
-            } else {
-                $message = "<p class='error-msg'>❌ Une erreur est survenue lors de l'enregistrement en base.</p>";
-            }
-        }
+        $message = "<p class='error-msg'>❌ Erreur lors de l'enregistrement.</p>";
     }
 }
 
-// 2. RÉCUPÉRATION DES DONNÉES FRAÎCHES
-$user = $admin->getUserById($userId);
-
-// --- Statistiques ---
-$totalRimesPerso = $db->prepare("SELECT COUNT(*) FROM rimes WHERE auteur_id = ?");
-$totalRimesPerso->execute([$userId]);
-$countPerso = $totalRimesPerso->fetchColumn();
-
-$totalRimesGlobal = $db->query("SELECT COUNT(*) FROM rimes")->fetchColumn();
-$totalUsers = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+$countPerso = $db->prepare("SELECT COUNT(*) FROM rimes WHERE auteur_id = ?");
+$countPerso->execute([$userId]);
+$myCount = $countPerso->fetchColumn();
 $onlineUsers = $db->query("SELECT COUNT(*) FROM users WHERE last_seen > datetime('now', '-5 minutes')")->fetchColumn();
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="ber">
 <head>
     <meta charset="UTF-8">
-    <title>Mon Profil - Dico Kabyle</title>
+    <title>Profil-iw - Dico Kabyle</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .password-wrapper { position: relative; display: flex; align-items: center; }
-        .toggle-eye { position: absolute; right: 12px; cursor: pointer; font-size: 1.2rem; user-select: none; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); animation: fadeIn 0.3s ease; }
-        .modal-card { background: white; width: 90%; max-width: 450px; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
-        .modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 25px; }
-        .btn-confirm-save { background: var(--primary-color); color: white; border-radius: 8px; }
-        .btn-cancel { background: #dfe6e9; color: #2d3436; border-radius: 8px; }
-        .readonly-field { background-color: #f0f0f0 !important; cursor: not-allowed; color: #666 !important; }
-        .stats-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .stat-box { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
-        .stat-number { font-size: 2.2rem; font-weight: bold; color: var(--accent-color); display: block; }
-        .stat-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        body { background: #f8fafc; color: #1e293b; }
+        .profile-header { display: flex; justify-content: space-between; align-items: center; margin: 30px 0; }
+        
+        /* Bouton Tableau de bord (Orange assorti) */
+        .btn-dashboard-orange { 
+            background: #e67e22 !important; 
+            color: white !important; 
+            padding: 10px 22px; 
+            border-radius: 8px; 
+            text-decoration: none; 
+            font-weight: 800; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            transition: 0.3s;
+            box-shadow: 0 4px 6px rgba(230, 126, 34, 0.2);
+        }
+        .btn-dashboard-orange:hover { background: #d35400 !important; transform: translateX(3px); }
+
+        .profile-card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border-top: 5px solid #e67e22; }
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .full-width { grid-column: span 2; }
+        
+        .form-group label { display: block; font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; }
+        
+        /* Style des champs avec dégradé intérieur vers gris orangé clair */
+        .form-group input { 
+            width: 100%; 
+            padding: 14px; 
+            border: 2px solid #f1f5f9; 
+            border-radius: 10px; 
+            font-size: 1rem; 
+            background: linear-gradient(to bottom right, #ffffff, #faf9f7); 
+            transition: 0.3s;
+        }
+        .form-group input:focus { 
+            border-color: #e67e22; 
+            outline: none; 
+            background: #ffffff;
+            box-shadow: inset 0 2px 4px rgba(230, 126, 34, 0.05);
+        }
+        .readonly-field { background: #f1f5f9 !important; color: #94a3b8; cursor: not-allowed; border: 2px solid #e2e8f0; }
+
+        .password-wrapper { position: relative; }
+        .toggle-eye { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.2rem; }
+
+        /* Bouton de mise à jour centré (Vert assorti) */
+        .submit-area { margin-top: 40px; text-align: center; }
+        .btn-update-green { 
+            background: #27ae60 !important; 
+            color: white !important; 
+            padding: 16px 50px; 
+            border-radius: 12px; 
+            font-weight: 900; 
+            font-size: 1.1rem; 
+            border: none; 
+            cursor: pointer; 
+            transition: 0.3s;
+            box-shadow: 0 6px 15px rgba(39, 174, 96, 0.3);
+        }
+        .btn-update-green:hover { 
+            transform: translateY(-3px); 
+            background: #219150 !important;
+            box-shadow: 0 10px 20px rgba(39, 174, 96, 0.4); 
+        }
+
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 30px; }
+        .stat-box { background: white; padding: 25px; border-radius: 15px; text-align: center; border-bottom: 4px solid #e2e8f0; }
+        .stat-val { font-size: 2rem; font-weight: 900; color: #2c3e50; display: block; }
+        .stat-lbl { font-size: 0.7rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+
+        #confirmModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center; z-index: 10000;
+        }
+        .modal-card { background: white; padding: 40px; border-radius: 24px; text-align: center; max-width: 400px; width: 90%; }
+        .btn-modal { padding: 12px 24px; border-radius: 10px; font-weight: 800; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-m-cancel { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-m-confirm { background: #27ae60; color: white; }
     </style>
 </head>
 <body>
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
 
-    <div class="container">
-        <header class="admin-header">
+    <div class="container" style="max-width: 800px;">
+        <header class="profile-header">
             <div>
-                <h1>Mon Profil</h1>
-                <p>Gestion des informations de <strong><?= htmlspecialchars($user['username']) ?></strong></p>
+                <h1 style="font-weight: 900; color: #1e293b; margin:0;">Profil-iw</h1>
+                <p style="color: #64748b; margin-top: 5px;">Amsidef n <strong><?= htmlspecialchars($user['username']) ?></strong></p>
             </div>
-            <a href="admin.php" class="btn-primary">← Dashboard</a>
+            <a href="admin.php" class="btn-dashboard-orange">
+                <span>📊</span> Tableau de bord
+            </a>
         </header>
 
         <?= $message ?>
 
-        <form method="POST" id="profileForm" class="admin-form shadow-box" style="background:white; padding:30px; border-radius:12px;">
-            <div class="admin-grid" style="margin-bottom: 20px;">
-                <div class="form-group">
-                    <label>Prénom *</label>
-                    <input type="text" name="prenom" value="<?= htmlspecialchars($user['prenom'] ?? '') ?>" required>
-                </div>
-                <div class="form-group">
-                    <label>Nom *</label>
-                    <input type="text" name="nom" value="<?= htmlspecialchars($user['nom'] ?? '') ?>" required>
-                </div>
-                <div class="form-group">
-                    <label>Adresse Email *</label>
-                    <input type="email" name="email" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
-                </div>
-                <div class="form-group">
-                    <label>Nom d'utilisateur</label>
-                    <input type="text" class="readonly-field" value="<?= htmlspecialchars($user['username']) ?>" readonly>
-                </div>
+        <div class="profile-card">
+            <form method="POST" id="profileForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Isem (Prénom)</label>
+                        <input type="text" name="prenom" value="<?= htmlspecialchars($user['prenom'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Anessem (Nom)</label>
+                        <input type="text" name="nom" value="<?= htmlspecialchars($user['nom'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Imayl (Email)</label>
+                        <input type="email" name="email" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Pseudo (Ur yettbeddil ara)</label>
+                        <input type="text" class="readonly-field" value="<?= htmlspecialchars($user['username']) ?>" readonly>
+                    </div>
 
-                <div class="form-group">
-                    <label>Mot de passe actuel</label>
-                    <div class="password-wrapper">
-                        <input type="password" name="current_password" id="current_password" placeholder="Requis pour changer de mot de passe">
-                        <span class="toggle-eye" onclick="togglePass('current_password', this)">👁️</span>
+                    <div class="form-group">
+                        <label>Awal n uɛeddi n tura</label>
+                        <div class="password-wrapper">
+                            <input type="password" name="current_password" id="current_pass" placeholder="Requis pour changer">
+                            <span class="toggle-eye" onclick="toggleVis('current_pass', this)">👁️</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Awal n uɛeddi amaynut</label>
+                        <div class="password-wrapper">
+                            <input type="password" name="new_password" id="new_pass" placeholder="Laissez vide si inchangé">
+                            <span class="toggle-eye" onclick="toggleVis('new_pass', this)">👁️</span>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Nouveau mot de passe</label>
-                    <div class="password-wrapper">
-                        <input type="password" name="new_password" id="new_password" placeholder="Laisser vide pour ne pas changer">
-                        <span class="toggle-eye" onclick="togglePass('new_password', this)">👁️</span>
-                    </div>
+
+                <div class="submit-area">
+                    <button type="button" class="btn-update-green" onclick="showModal()">
+                        Mettre à jour mes informations
+                    </button>
                 </div>
-            </div>
+            </form>
+        </div>
 
-            <button type="button" class="btn-submit btn-full" onclick="openConfirmModal()">Mettre à jour mon profil</button>
-        </form>
-
-        <div class="stats-container">
+        <div class="stats-row">
             <div class="stat-box">
-                <h3 style="margin-top:0; color:var(--primary-color);">🌍 Site</h3>
-                <div style="display:flex; justify-content: space-around; margin-top:15px;">
-                    <div><span class="stat-number"><?= $totalRimesGlobal ?></span><span class="stat-label">Rimes</span></div>
-                    <div><span class="stat-number"><?= $totalUsers ?></span><span class="stat-label">Inscrits</span></div>
-                    <div><span class="stat-number" style="color:var(--success-color)"><?= $onlineUsers ?></span><span class="stat-label">En ligne</span></div>
-                </div>
+                <span class="stat-val"><?= $myCount ?></span>
+                <span class="stat-lbl">Mes contributions</span>
             </div>
             <div class="stat-box">
-                <h3 style="margin-top:0; color:var(--primary-color);">👤 Moi</h3>
-                <div style="display:flex; justify-content: space-around; margin-top:15px;">
-                    <div><span class="stat-number"><?= $countPerso ?></span><span class="stat-label">Mes rimes</span></div>
-                    <div><span class="stat-number" style="font-size:1.1rem; padding: 12px 0;"><?= date('d/m/Y', strtotime($user['created_at'])) ?></span><span class="stat-label">Membre depuis</span></div>
-                    <div><span class="badge" style="margin-top:15px;"><?= ucfirst($user['role']) ?></span><span class="stat-label" style="display:block;">Rang</span></div>
-                </div>
+                <span class="stat-val" style="color: #27ae60;"><?= $onlineUsers ?></span>
+                <span class="stat-lbl">Membres en ligne</span>
             </div>
         </div>
     </div>
 
-    <div id="confirmModal" class="modal-overlay">
-        <div class="modal-card">
-            <span style="font-size: 3.5rem; display: block; margin-bottom: 15px;">🛡️</span>
-            <h2>Confirmer ?</h2>
-            <p>Voulez-vous enregistrer les modifications apportées à votre profil ?</p>
-            <div class="modal-buttons">
-                <button class="btn-modal btn-cancel" onclick="closeConfirmModal()">Annuler</button>
-                <button class="btn-modal btn-confirm-save" onclick="document.getElementById('profileForm').submit()">Valider</button>
+    <div id="confirmModal" onclick="hideModal()">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🛡️</div>
+            <h2 style="font-weight: 900;">Confirmation</h2>
+            <p style="color: #64748b; margin-bottom: 25px;">Voulez-vous enregistrer les modifications de votre profil ?</p>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button class="btn-modal btn-m-cancel" onclick="hideModal()">ANNULER</button>
+                <button class="btn-modal btn-m-confirm" onclick="document.getElementById('profileForm').submit()">VALIDER</button>
             </div>
         </div>
     </div>
 
     <script>
-        function togglePass(id, icon) {
-            const input = document.getElementById(id);
-            input.type = input.type === "password" ? "text" : "password";
-            icon.textContent = input.type === "password" ? "👁️" : "🙈";
+        function toggleVis(id, icon) {
+            const el = document.getElementById(id);
+            if (el.type === "password") {
+                el.type = "text"; icon.textContent = "🙈";
+            } else {
+                el.type = "password"; icon.textContent = "👁️";
+            }
         }
-        function openConfirmModal() { document.getElementById('confirmModal').style.display = 'flex'; }
-        function closeConfirmModal() { document.getElementById('confirmModal').style.display = 'none'; }
-        window.onclick = function(e) { if (e.target.className === 'modal-overlay') closeConfirmModal(); }
+        function showModal() { document.getElementById('confirmModal').style.display = 'flex'; }
+        function hideModal() { document.getElementById('confirmModal').style.display = 'none'; }
     </script>
 </body>
 </html>

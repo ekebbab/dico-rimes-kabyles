@@ -1,11 +1,12 @@
 <?php
 /**
- * PAGE ÉDITION - VERSION LINGUISTIQUE AVANCÉE
- * Supporte la nouvelle structure : Lettre, Classe, Genre, Nombre.
+ * PAGE ÉDITION - VERSION LINGUISTIQUE GÉNÉRATIVE
+ * Supporte la nouvelle structure et les terminaisons dynamiques.
  */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
+require_once __DIR__ . '/../src/terminaisons.php'; // Inclusion de la logique centralisée
 
 Auth::init();
 $engine = new RhymeEngine();
@@ -37,25 +38,6 @@ if (!Auth::canManage($word['auteur_id'], $word['author_role'])) {
     exit;
 }
 
-// Configuration des lettres pivots et des terminaisons (Rimes)
-$familles = [
-    'B'=>['BA','BI','BU','AB','IB','UB','EB'], 'C'=>['CA','CI','CU','AC','IC','UC','EC'],
-    'Č'=>['ČA','ČI','ČU','AČ','IČ','UČ','EČ'], 'D'=>['DA','DI','DU','AD','ID','UD','ED'],
-    'Ḍ'=>['ḌA','ḌI','ḌU','AḌ','IḌ','UḌ','EḌ'], 'F'=>['FA','FI','FU','AF','IF','UF','EF'],
-    'G'=>['GA','GI','GU','AG','IG','UG','EG'], 'Ǧ'=>['ǦA','ǦI','ǦU','AǦ','IǦ','UǦ','EǦ'],
-    'H'=>['HA','HI','HU','AH','IH','UH','EH'], 'Ḥ'=>['ḤA','ḤI','ḤU','AḤ','IḤ','UḤ','EḤ'],
-    'J'=>['JA','JI','JU','AJ','IJ','UJ','EJ'], 'K'=>['KA','KI','KU','AK','IK','UK','EK'],
-    'L'=>['LA','LI','LU','AL','IL','UL','EL'], 'M'=>['MA','MI','MU','AM','IM','UM','EM'],
-    'N'=>['NA','NI','NU','AN','IN','UN','EN'], 'Q'=>['QA','QI','QU','AQ','IQ','UQ','EQ'],
-    'R'=>['RA','RI','RU','AR','IR','UR','ER'], 'Ř'=>['ŘA','ŘI','ŘU','AŘ','IŘ','UŘ','EŘ'],
-    'S'=>['SA','SI','SU','AS','IS','US','ES'], 'Ṣ'=>['ṢA','ṢI','ṢU','AṢ','IṢ','UṢ','EṢ'],
-    'T'=>['TA','TI','TU','AT','IT','UT','ET'], 'Ṭ'=>['ṬA','ṬI','ṬU','AṬ','IṬ','UṬ','EṬ'],
-    'X'=>['XA','XI','XU','AX','IX','UX','EX'], 'Y'=>['YA','YI','YU','AY','IY','UY','EY'],
-    'Z'=>['ZA','ZI','ZU','AZ','IZ','UZ','EZ'], 'Ẓ'=>['ẒA','ẒI','ẒU','AẒ','IẒ','UẒ','EẒ'],
-    'Ž'=>['ŽA','ŽI','ŽU','AŽ','IŽ','UŽ','EŽ'], 'Ɛ'=>['ƐA','ƐI','ƐU','AƐ','IƐ','UƐ','EƐ'],
-    'Ɣ'=>['ƔA','ƔI','ƔU','AƔ','IƔ','UƔ','EƔ']
-];
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Extraction des données POST
     $data = [
@@ -74,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         if ($admin->updateWord($id, $data)) {
             $message = "<p class='success-msg'>✅ Modifications enregistrées avec succès !</p>";
-            // Rafraîchir les données locales
+            // Rafraîchir les données locales pour l'affichage
             $stmt->execute([$id]); 
             $word = $stmt->fetch(PDO::FETCH_ASSOC);
         } else {
@@ -182,27 +164,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
-        const rimesData = <?= json_encode($familles) ?>;
+        // Récupération du JSON généré par terminaisons.php
+        const rimesData = <?= getRimesJson($familles) ?>;
         const currentRime = "<?= $word['rime'] ?>";
         const fSel = document.getElementById('familleSelect');
         const rSel = document.getElementById('rimeSelect');
 
         function updateRimes(fam, selRime = null) {
-            rSel.innerHTML = '<option value="">-- Rime --</option>';
+            rSel.innerHTML = '<option value="">-- Sélectionner la rime --</option>';
             if (fam && rimesData[fam]) {
                 rimesData[fam].forEach(r => {
                     const opt = document.createElement('option');
                     opt.value = r; 
                     opt.textContent = r;
+                    // On présélectionne la rime actuelle du mot
                     if (r === selRime) opt.selected = true;
                     rSel.appendChild(opt);
                 });
             }
         }
 
-        // Initialisation
+        // Initialisation immédiate au chargement de la page
         updateRimes(fSel.value, currentRime);
-        fSel.addEventListener('change', function() { updateRimes(this.value); });
+
+        // Mise à jour si l'utilisateur change la lettre pivot
+        fSel.addEventListener('change', function() { 
+            updateRimes(this.value); 
+        });
 
         function openModal() { document.getElementById('confirmModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('confirmModal').style.display = 'none'; }

@@ -1,35 +1,30 @@
 <?php
 /**
- * DASHBOARD ADMINISTRATEUR - VERSION LINGUISTIQUE AVANCÉE
- * Gestion des rimes, variantes et export PDF synchronisé.
+ * DASHBOARD ADMINISTRATEUR - VERSION DESIGN PREMIUM 2026
+ * Harmonisé avec l'esthétique Amawal (dégradés, ombres portées, typographie grasse).
  */
-require_once __DIR__ . '/../src/RhymeEngine.php';
-require_once __DIR__ . '/../src/AdminEngine.php';
 require_once __DIR__ . '/../src/Auth.php';
-
 Auth::init();
 
-$engine = new RhymeEngine();
+require_once __DIR__ . '/../src/RhymeEngine.php';
+require_once __DIR__ . '/../src/AdminEngine.php';
 
-// Sécurité : Redirection si non connecté
-if (!Auth::isLogged($engine->getPDO())) { 
+$engine = new RhymeEngine();
+$db = $engine->getPDO();
+
+if (!Auth::isLogged($db)) { 
     header('Location: login.php'); 
     exit; 
 }
 
-$admin = new AdminEngine($engine->getPDO());
+$admin = new AdminEngine($db);
+$role = Auth::getRole();
+$userId = Auth::getUserId();
 
-// --- LOGIQUE DE SUPPRESSION SÉCURISÉE ---
+// --- LOGIQUE DE SUPPRESSION ---
 if (isset($_GET['delete'])) {
     $id = (int)$_GET['delete'];
-    
-    // Récupération des infos pour vérification des droits
-    $stmt = $engine->getPDO()->prepare("
-        SELECT r.auteur_id, u.role as author_role 
-        FROM rimes r 
-        LEFT JOIN users u ON r.auteur_id = u.id 
-        WHERE r.id = ?
-    ");
+    $stmt = $db->prepare("SELECT auteur_id, (SELECT role FROM users WHERE id=auteur_id) as author_role FROM rimes WHERE id = ?");
     $stmt->execute([$id]);
     $info = $stmt->fetch();
 
@@ -42,15 +37,14 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// Paramètres de filtrage et tri (Alignés sur RhymeEngine)
+// --- PARAMÈTRES ---
 $params = [
-    'q'     => $_GET['q'] ?? '',
-    'sort'  => $_GET['sort'] ?? 'updated_at',
-    'order' => $_GET['order'] ?? 'desc',
-    'limit' => $_GET['limit'] ?? '50'
+    'q'      => $_GET['q'] ?? '',
+    'sort'   => $_GET['sort'] ?? 'updated_at',
+    'order'  => $_GET['order'] ?? 'desc',
+    'limit'  => $_GET['limit'] ?? '50'
 ];
 
-// Appel du moteur de recherche pour récupérer les données triées
 $words = $engine->searchAdvanced($params);
 ?>
 <!DOCTYPE html>
@@ -61,148 +55,200 @@ $words = $engine->searchAdvanced($params);
     <title>Dashboard - Dico Kabyle</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .badge-variante {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            font-weight: normal;
-            margin-left: 6px;
-            font-style: italic;
+        body { background: #f8fafc; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+        /* --- EN-TÊTE ET BOUTONS --- */
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 35px; margin-top: 20px; }
+        .header-btns { display: flex; gap: 15px; }
+
+        .btn-new { 
+            background: #27ae60 !important; 
+            color: white !important; 
+            padding: 14px 28px; 
+            border-radius: 12px; 
+            text-decoration: none; 
+            font-weight: 900; 
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.3s;
+            box-shadow: 0 6px 15px rgba(39, 174, 96, 0.25);
         }
+        .btn-new:hover { background: #219150 !important; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(39, 174, 96, 0.35); }
 
-        .meta-info {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        /* --- STYLE DE LA MODALE MODERNE --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: none; align-items: center; justify-content: center;
-            z-index: 1000; backdrop-filter: blur(5px);
-            animation: fadeIn 0.3s ease;
-        }
-
-        .modal-card {
-            background: white; width: 90%; max-width: 450px;
-            padding: 30px; border-radius: 20px; text-align: center;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.4);
-            transform: translateY(-20px); transition: 0.3s ease;
-        }
-
-        .modal-icon { font-size: 3.5rem; margin-bottom: 15px; display: block; }
-        .modal-card h2 { color: #2d3436; margin-bottom: 15px; }
-        .modal-card p { color: #636e72; line-height: 1.6; margin-bottom: 25px; }
-
-        .modal-buttons { display: flex; gap: 12px; justify-content: center; }
-        
-        .btn-modal { 
-            padding: 12px 24px; border-radius: 10px; border: none; 
-            font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem;
-        }
-        
-        .btn-confirm { background: #e74c3c; color: white; } 
-        .btn-confirm.edit { background: var(--primary-color); } 
-        .btn-cancel { background: #dfe6e9; color: #2d3436; }
-        
-        .btn-modal:hover { opacity: 0.85; transform: translateY(-2px); }
-
-        .export-card {
-            background: #fff;
-            padding: 25px;
+        .btn-members {
+            background: #8e44ad !important;
+            color: white !important;
+            padding: 14px 28px;
             border-radius: 12px;
-            margin-top: 30px;
-            text-align: center;
-            box-shadow: var(--shadow);
-            border: 1px solid #eee;
+            text-decoration: none;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.3s;
+            box-shadow: 0 6px 15px rgba(142, 68, 173, 0.25);
+        }
+        .btn-members:hover { background: #7d3c98 !important; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(142, 68, 173, 0.35); }
+
+        /* --- FILTRES (Style profile.php) --- */
+        .filter-row { 
+            display: grid; 
+            grid-template-columns: 2fr 1fr 1fr 1fr; 
+            gap: 20px; 
+            background: white; 
+            padding: 25px; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            margin-bottom: 40px;
+            border: 1px solid #eef2f6;
+        }
+        .filter-row label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+        .filter-row select, .filter-row input { 
+            width: 100%; 
+            padding: 12px 15px; 
+            border: 2px solid #f1f5f9; 
+            border-radius: 10px;
+            font-size: 0.95rem;
+            color: #475569;
+            background: linear-gradient(to bottom right, #ffffff, #faf9f7);
+            transition: 0.3s;
+        }
+        .filter-row select:focus, .filter-row input:focus {
+            border-color: #e67e22;
+            outline: none;
+            background: #ffffff;
+            box-shadow: inset 0 2px 4px rgba(230, 126, 34, 0.05);
         }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* --- TABLE --- */
+        .table-wrapper { 
+            background: white; 
+            border-radius: 24px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.04); 
+            overflow: hidden; 
+            border: 1px solid #f1f5f9; 
+        }
+        .styled-table { width: 100%; border-collapse: collapse; }
+        .styled-table th { background: #fafbfc; color: #94a3b8; text-align: left; padding: 20px; font-weight: 800; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; border-bottom: 2px solid #f8fafc; }
+        .styled-table td { padding: 20px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+        .styled-table tr:hover { background-color: #fdfdfd; }
+
+        /* --- ACTIONS --- */
+        .action-column { text-align: right !important; }
+        .btn-action { padding: 10px 18px; border-radius: 10px; font-weight: 800; text-decoration: none; font-size: 0.8rem; transition: 0.2s; display: inline-block; }
+        .btn-edit { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+        .btn-edit:hover { background: #0369a1; color: white; transform: scale(1.05); }
+        .btn-delete { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; margin-left: 8px; }
+        .btn-delete:hover { background: #b91c1c; color: white; transform: scale(1.05); }
+
+        /* --- MODALE --- */
+        #customModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);
+            display: none; align-items: center; justify-content: center; z-index: 10000;
+        }
+        #customModal.active { display: flex; }
+        .modal-card {
+            background: white; padding: 45px; border-radius: 30px; max-width: 450px; width: 90%;
+            text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .btn-modal { padding: 16px 32px; border-radius: 15px; font-weight: 900; font-size: 1rem; cursor: pointer; transition: 0.3s; border: none; }
+        .btn-modal-cancel { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-modal-cancel:hover { background: #e2e8f0; color: #1e293b; }
     </style>
 </head>
 <body>
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
 
-    <div class="container">
-        <div class="admin-header">
+    <div class="container" style="max-width: 1100px;">
+        <header class="admin-header">
             <div>
-                <h1>Gestion du Dictionnaire</h1>
-                <p>Session : <span class="badge"><?= ucfirst(Auth::getRole()) ?></span></p>
+                <h1 style="font-weight: 900; color: #1e293b; font-size: 2.5rem; margin:0;">Dashboard</h1>
+                <p style="color: #64748b; margin-top:8px; font-size: 1.1rem;">Gestion du dictionnaire • <strong><?= htmlspecialchars($_SESSION['username']) ?></strong></p>
             </div>
-            <div class="admin-actions">
-                <a href="add_word.php" class="btn-add">+ Nouveau Mot</a>
-                <?php if(Auth::getRole() === 'superadmin'): ?>
-                    <a href="manage_users.php" class="btn-primary" style="margin-left:10px;">Membres</a>
+            <div class="header-btns">
+                <?php if ($role === 'superadmin'): ?>
+                    <a href="manage_users.php" class="btn-members">
+                        <span>👥</span> MEMBRES
+                    </a>
                 <?php endif; ?>
+                <a href="add_word.php" class="btn-new">
+                    <span>➕</span> NOUVEAU MOT
+                </a>
             </div>
-        </div>
+        </header>
 
-        <div class="filter-card">
-            <form method="GET" class="filter-form" id="autoFilterForm">
-                <input type="text" name="q" placeholder="Rechercher mot, sens..." value="<?= htmlspecialchars($params['q']) ?>">
-                
-                <select name="sort">
-                    <option value="updated_at" <?= $params['sort'] == 'updated_at' ? 'selected' : '' ?>>Date Modif.</option>
-                    <option value="mot" <?= $params['sort'] == 'mot' ? 'selected' : '' ?>>Ordre Alphabétique</option>
-                    <option value="lettre" <?= $params['sort'] == 'lettre' ? 'selected' : '' ?>>Lettre Pivot</option>
-                    <option value="rime" <?= $params['sort'] == 'rime' ? 'selected' : '' ?>>Rime</option>
+        <form method="GET" id="filterForm" class="filter-row">
+            <div>
+                <label>Recherche</label>
+                <input type="text" name="q" placeholder="Rechercher un mot..." value="<?= htmlspecialchars($params['q']) ?>">
+            </div>
+            <div>
+                <label>Trier par</label>
+                <select name="sort" onchange="this.form.submit()">
+                    <option value="updated_at" <?= $params['sort'] == 'updated_at' ? 'selected' : '' ?>>Date de modification</option>
+                    <option value="mot" <?= $params['sort'] == 'mot' ? 'selected' : '' ?>>Ordre alphabétique</option>
                 </select>
-
-                <select name="order">
+            </div>
+            <div>
+                <label>Ordre</label>
+                <select name="order" onchange="this.form.submit()">
                     <option value="DESC" <?= $params['order'] == 'DESC' ? 'selected' : '' ?>>Décroissant ↓</option>
                     <option value="ASC" <?= $params['order'] == 'ASC' ? 'selected' : '' ?>>Croissant ↑</option>
                 </select>
-
-                <select name="limit">
-                    <option value="10" <?= $params['limit'] == '10' ? 'selected' : '' ?>>10 lignes</option>
+            </div>
+            <div>
+                <label>Affichage</label>
+                <select name="limit" onchange="this.form.submit()">
                     <option value="50" <?= $params['limit'] == '50' ? 'selected' : '' ?>>50 lignes</option>
                     <option value="100" <?= $params['limit'] == '100' ? 'selected' : '' ?>>100 lignes</option>
-                    <option value="500" <?= $params['limit'] == '500' ? 'selected' : '' ?>>500 lignes</option>
                     <option value="all" <?= $params['limit'] == 'all' ? 'selected' : '' ?>>Tout afficher</option>
                 </select>
-            </form>
-        </div>
+            </div>
+        </form>
 
-        <div class="table-container">
+        <div class="table-wrapper">
             <table class="styled-table">
                 <thead>
                     <tr>
                         <th>Mot & Grammaire</th>
-                        <th>Phonétique</th>
+                        <th>Phonétique / Rime</th>
                         <th>Signification</th>
-                        <th>Actions</th>
+                        <th class="action-column">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($words)): ?>
-                        <tr><td colspan="4" style="text-align:center; padding: 30px;">Aucune donnée ne correspond à vos filtres.</td></tr>
+                        <tr><td colspan="4" style="text-align:center; padding: 40px; color: #94a3b8;">Aucun résultat trouvé pour votre recherche.</td></tr>
                     <?php else: ?>
                         <?php foreach ($words as $word): ?>
                         <tr>
                             <td>
-                                <div class="bold">
-                                    <?= htmlspecialchars($word['mot']) ?>
-                                    <?php if($word['variante'] > 1): ?>
-                                        <span class="badge-variante">(v<?= $word['variante'] ?>)</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="meta-info">
-                                    <?= htmlspecialchars($word['classe_grammaticale']) ?> 
-                                    (<?= htmlspecialchars($word['genre']) ?> / <?= htmlspecialchars($word['nombre']) ?>)
-                                </div>
+                                <div style="font-weight: 900; color: #1e293b; font-size: 1.2rem;"><?= htmlspecialchars($word['mot']) ?></div>
+                                <span style="font-size: 0.65rem; background:#f1f5f9; padding:4px 10px; border-radius:6px; font-weight:900; color:#64748b; text-transform:uppercase; margin-top:5px; display:inline-block;">
+                                    <?= htmlspecialchars($word['classe_grammaticale']) ?>
+                                </span>
                             </td>
                             <td>
-                                <span class="badge">L: <?= htmlspecialchars($word['lettre']) ?></span><br>
-                                <span class="badge badge-info">R: <?= htmlspecialchars($word['rime']) ?></span>
+                                <span style="background: #fff7ed; color: #ea580c; padding: 6px 14px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; border: 1px solid #ffedd5;">
+                                    <?= htmlspecialchars($word['rime']) ?>
+                                </span>
                             </td>
-                            <td>
-                                <div style="max-width: 300px; font-size: 0.9rem;">
-                                    <?= mb_strimwidth(htmlspecialchars($word['signification']), 0, 80, "...") ?>
-                                </div>
+                            <td style="color: #475569; font-size: 0.95rem; line-height: 1.4;">
+                                <?= mb_strimwidth(htmlspecialchars($word['signification']), 0, 70, "...") ?>
                             </td>
-                            <td class="actions">
-                                <a href="#" class="link-edit" onclick="openModal('edit', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Modifier</a>
-                                <a href="#" class="link-delete" onclick="openModal('delete', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Supprimer</a>
+                            <td class="action-column">
+                                <a href="javascript:void(0)" class="btn-action btn-edit" onclick="openModal('edit', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Modifier</a>
+                                <a href="javascript:void(0)" class="btn-action btn-delete" onclick="openModal('delete', '<?= $word['id'] ?>', '<?= addslashes(htmlspecialchars($word['mot'])) ?>')">Supprimer</a>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -210,76 +256,47 @@ $words = $engine->searchAdvanced($params);
                 </tbody>
             </table>
         </div>
+    </div>
 
-        <div class="export-card">
-            <h3>Exportation du Catalogue</h3>
-            <p style="color: var(--text-muted); margin-bottom: 15px;">Générez un document PDF professionnel basé sur la structure linguistique actuelle.</p>
-            <a href="export_pdf.php?<?= http_build_query($params) ?>" class="btn-primary" target="_blank" style="background:#e67e22; border:none; padding:12px 25px; text-decoration: none; display: inline-block; border-radius: 8px; color: white; font-weight: bold;">
-                📥 Télécharger le Catalogue PDF
-            </a>
-        </div>
-
-    </div> 
-
-    <div id="customModal" class="modal-overlay">
-        <div class="modal-card">
-            <span id="modalIcon" class="modal-icon">⚠️</span>
-            <h2 id="modalTitle">Confirmation</h2>
-            <p id="modalText">Voulez-vous effectuer cette action ?</p>
+    <div id="customModal" onclick="closeModal()">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div id="modalIcon" style="font-size: 5rem; margin-bottom: 25px;">⚠️</div>
+            <h2 id="modalTitle" style="font-weight: 900; color: #1e293b; margin-bottom: 15px; font-size: 1.8rem;">Confirmation</h2>
+            <p id="modalText" style="color: #64748b; margin-bottom: 35px; line-height: 1.6; font-size: 1.1rem;">Action en cours...</p>
             
-            <div class="modal-buttons">
-                <button class="btn-modal btn-cancel" onclick="closeModal()">Annuler</button>
-                <button id="confirmBtn" class="btn-modal btn-confirm">Confirmer</button>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <button class="btn-modal btn-modal-cancel" onclick="closeModal()">ANNULER</button>
+                <button id="confirmBtn" class="btn-modal" style="color:white; font-weight:900;">CONFIRMER</button>
             </div>
         </div>
     </div>
 
     <script>
         const modal = document.getElementById('customModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalText = document.getElementById('modalText');
-        const modalIcon = document.getElementById('modalIcon');
         const confirmBtn = document.getElementById('confirmBtn');
 
         function openModal(type, id, word) {
-            modal.style.display = 'flex';
-            
+            modal.classList.add('active');
             if (type === 'delete') {
-                modalIcon.textContent = "🗑️";
-                modalTitle.textContent = "Supprimer l'entrée";
-                modalText.innerHTML = `Voulez-vous supprimer définitivement <strong>"${word}"</strong> ?<br>Les variantes seront réorganisées automatiquement.`;
-                confirmBtn.textContent = "Confirmer la suppression";
-                confirmBtn.className = "btn-modal btn-confirm";
-                confirmBtn.onclick = function() {
-                    window.location.href = `admin.php?delete=${id}`;
-                };
-            } 
-            else if (type === 'edit') {
-                modalIcon.textContent = "✏️";
-                modalTitle.textContent = "Modifier l'entrée";
-                modalText.innerHTML = `Ouvrir l'éditeur pour le mot <strong>"${word}"</strong> ?`;
-                confirmBtn.textContent = "Éditer";
-                confirmBtn.className = "btn-modal btn-confirm edit";
-                confirmBtn.onclick = function() {
-                    window.location.href = `edit_word.php?id=${id}`;
-                };
+                document.getElementById('modalIcon').textContent = "🗑️";
+                document.getElementById('modalTitle').textContent = "SUPPRIMER";
+                document.getElementById('modalText').innerHTML = `Voulez-vous supprimer définitivement le mot <strong style="color: #1e293b;">"${word}"</strong> ?<br><small>Cette action est irréversible.</small>`;
+                confirmBtn.style.background = "#dc2626";
+                confirmBtn.style.boxShadow = "0 8px 15px rgba(220, 38, 38, 0.3)";
+                confirmBtn.textContent = "SUPPRIMER";
+                confirmBtn.onclick = () => window.location.href = `admin.php?delete=${id}`;
+            } else {
+                document.getElementById('modalIcon').textContent = "✏️";
+                document.getElementById('modalTitle').textContent = "MODIFIER";
+                document.getElementById('modalText').innerHTML = `Voulez-vous ouvrir l'éditeur pour le mot <strong style="color: #1e293b;">"${word}"</strong> ?`;
+                confirmBtn.style.background = "#2563eb";
+                confirmBtn.style.boxShadow = "0 8px 15px rgba(37, 99, 235, 0.3)";
+                confirmBtn.textContent = "ÉDITER";
+                confirmBtn.onclick = () => window.location.href = `edit_word.php?id=${id}`;
             }
         }
 
-        function closeModal() {
-            modal.style.display = 'none';
-        }
-
-        window.onclick = function(event) {
-            if (event.target == modal) closeModal();
-        }
-
-        // Auto-soumission des filtres lors du changement des sélecteurs
-        document.querySelectorAll('#autoFilterForm select').forEach(select => {
-            select.addEventListener('change', () => {
-                document.getElementById('autoFilterForm').submit();
-            });
-        });
+        function closeModal() { modal.classList.remove('active'); }
     </script>
 </body>
 </html>

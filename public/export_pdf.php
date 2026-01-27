@@ -1,8 +1,8 @@
 <?php
 /**
- * EXPORTATION PREMIUM DU CATALOGUE - DICO KABYLE
- * Moteur : Mpdf (via Composer)
- * Gère parfaitement l'UTF-8 et le design élégant.
+ * EXPORTATION LINGUISTIQUE DU CATALOGUE - DICO KABYLE
+ * Supporte la nouvelle structure : Lettre Pivot, Classe, Genre, Nombre.
+ * Moteur : Mpdf
  */
 
 // 1. CHARGEMENT DES COMPOSANTS
@@ -12,22 +12,24 @@ require_once __DIR__ . '/../src/Auth.php';
 
 Auth::init();
 
-// 2. SÉCURITÉ
 $engine = new RhymeEngine();
-if (!Auth::isLogged($engine->getPDO())) {
+$db = $engine->getPDO();
+
+// 2. SÉCURITÉ
+if (!Auth::isLogged($db)) {
     header('Location: login.php');
     exit;
 }
 
-// 3. CONFIGURATION DES COULEURS (La fameuse "Palette" à modifier ici)
-$colorMain   = '#e67e22'; // Orange : Titres et Mots
-$colorDark   = '#2c3e50'; // Bleu Nuit : Bandeaux et Texte
-$colorMuted  = '#7f8c8d'; // Gris : Pied de page et Stats
-$colorBgRime = '#fdf2e9'; // Fond léger pour les rimes
+// 3. CONFIGURATION GRAPHIQUE
+$colorMain    = '#e67e22'; // Orange : Titres et Mots
+$colorDark    = '#2c3e50'; // Bleu Nuit : Bandeaux et Texte
+$colorMuted   = '#7f8c8d'; // Gris : Pied de page
+$colorBgBadge = '#f1f2f6'; // Gris clair pour les badges grammaire
+$colorAccent  = '#d35400'; // Orange foncé pour la rime
 
-// 4. RÉCUPÉRATION DES DONNÉES
-$db = $engine->getPDO();
-$rimes = $db->query("SELECT * FROM rimes ORDER BY famille ASC, mot ASC")->fetchAll(PDO::FETCH_ASSOC);
+// 4. RÉCUPÉRATION DES DONNÉES (Triées par Lettre Pivot)
+$rimes = $db->query("SELECT * FROM rimes ORDER BY lettre ASC, mot ASC")->fetchAll(PDO::FETCH_ASSOC);
 $total = count($rimes);
 
 // 5. INITIALISATION DE MPDF
@@ -35,96 +37,108 @@ $mpdf = new \Mpdf\Mpdf([
     'mode' => 'utf-8',
     'format' => 'A4',
     'margin_top' => 25,
-    'default_font' => 'dejavusans' // Supporte les caractères kabyles
+    'default_font' => 'dejavusans' 
 ]);
 
-// --- FILIGRANE (Watermark) ---
-$mpdf->SetWatermarkText('Dictionnaire Kabyle des Rimes', 0.05); // Texte et transparence (0.05 = très discret)
+$mpdf->SetWatermarkText('Dictionnaire Kabyle', 0.04);
 $mpdf->showWatermarkText = true;
 
-// 6. DÉFINITION DU STYLE (CSS)
-// On injecte les variables PHP (ex: {$colorMain}) directement dans le texte CSS
+// 6. STYLE CSS (Adapté aux badges linguistiques)
 $stylesheet = "
-    body { font-family: 'dejavusans', sans-serif; color: {$colorDark}; }
+    body { font-family: 'dejavusans', sans-serif; color: {$colorDark}; font-size: 10pt; }
     
-    /* Page de garde */
     .cover { text-align: center; margin-top: 80mm; }
-    .cover h1 { font-size: 40pt; color: {$colorMain}; margin-bottom: 5mm; }
+    .cover h1 { font-size: 35pt; color: {$colorMain}; margin-bottom: 2mm; }
     .cover p { font-size: 14pt; color: {$colorMuted}; }
     
-    /* Titres de sections (Lettres) */
     .letter-title { 
         background-color: {$colorDark}; color: white; 
-        padding: 10px 15px; margin-top: 20px; 
-        border-radius: 5px; font-size: 18pt; 
+        padding: 8px 15px; margin-top: 30px; margin-bottom: 10px;
+        border-radius: 4px; font-size: 16pt; font-weight: bold;
     }
     
-    /* Tableau des rimes */
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-    td { padding: 12px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2px; }
+    td { padding: 10px; border-bottom: 0.1mm solid #eee; vertical-align: top; }
     
-    .mot-cell { font-weight: bold; color: {$colorMain}; font-size: 12pt; width: 30%; }
+    .mot-box { width: 30%; }
+    .mot-text { font-weight: bold; color: {$colorMain}; font-size: 11pt; }
+    .variante { font-size: 8pt; color: {$colorMuted}; font-weight: normal; font-style: italic; }
+    
+    .grammaire-info { font-size: 7.5pt; color: #57606f; margin-top: 4px; text-transform: uppercase; }
+    
+    .rime-box { width: 15%; text-align: center; }
     .rime-tag { 
-        background: {$colorBgRime}; color: #d35400; 
-        padding: 3px 8px; border-radius: 4px; font-size: 10pt; font-weight: bold;
+        background: #fdf2e9; color: {$colorAccent}; 
+        padding: 4px 10px; border-radius: 15px; font-size: 9pt; font-weight: bold;
+        border: 0.1mm solid #fadbd8;
     }
-    .signif-cell { font-size: 10pt; line-height: 1.5; width: 55%; }
+    
+    .signif-box { width: 55%; font-size: 9.5pt; color: #2f3542; }
+    .exemple-text { font-size: 8.5pt; color: {$colorMuted}; font-style: italic; margin-top: 5px; border-left: 0.5mm solid {$colorMain}; padding-left: 8px; }
 ";
 
-// 7. CONSTRUCTION DE LA PAGE DE GARDE
+// 7. PAGE DE GARDE
 $coverHtml = "
 <div class='cover'>
-    <h1>Dico Kabyle</h1>
-    <p>Catalogue Complet des Rimes</p>
-    <div style='margin-top: 20px; font-weight: bold;'>$total rimes répertoriées</div>
-    <p style='font-size: 10pt;'>Généré le " . date('d/m/Y H:i') . "</p>
+    <h1 style='letter-spacing: 2px;'>AMAWAL</h1>
+    <p>Dictionnaire des Rimes Kabyles</p>
+    <div style='margin-top: 30px; font-size: 12pt;'>Total des entrées : <strong>$total</strong></div>
+    <div style='margin-top: 10px; font-size: 9pt; color: {$colorMuted};'>Généré le " . date('d/m/Y') . "</div>
 </div>";
 
-// 8. CONSTRUCTION DU CORPS DU CATALOGUE
+// 8. CORPS DU DOCUMENT
 $contentHtml = "";
 $currentLetter = '';
 
 foreach ($rimes as $r) {
-    // Si on change de lettre (ex: de A à B)
-    if ($currentLetter !== $r['famille']) {
-        $currentLetter = $r['famille'];
-        $contentHtml .= "<div class='letter-title'>Lettre " . $currentLetter . "</div>";
-        // Ajout d'un signet (bookmark) pour la navigation dans le PDF
+    // Rupture de séquence par Lettre Pivot
+    if ($currentLetter !== $r['lettre']) {
+        $currentLetter = $r['lettre'];
+        $contentHtml .= "<div class='letter-title'>Consonne $currentLetter</div>";
         $contentHtml .= "<bookmark content='Lettre $currentLetter' level='0' />";
     }
+
+    // Préparation des infos grammaticales
+    $grammaire = htmlspecialchars($r['classe_grammaticale']);
+    if (!empty($r['genre']) && $r['genre'] !== 'N/A') $grammaire .= " | " . htmlspecialchars($r['genre']);
+    if (!empty($r['nombre']) && $r['nombre'] !== 'N/A') $grammaire .= " | " . htmlspecialchars($r['nombre']);
 
     $contentHtml .= "
     <table>
         <tr>
-            <td class='mot-cell'>" . htmlspecialchars($r['mot']) . "</td>
-            <td style='width: 15%;'><span class='rime-tag'>" . htmlspecialchars($r['rime']) . "</span></td>
-            <td class='signif-cell'>" . nl2br(htmlspecialchars($r['signification'])) . "</td>
+            <td class='mot-box'>
+                <span class='mot-text'>" . htmlspecialchars($r['mot']) . "</span>" . 
+                ($r['variante'] > 1 ? " <span class='variante'>(v{$r['variante']})</span>" : "") . "
+                <div class='grammaire-info'>$grammaire</div>
+            </td>
+            <td class='rime-box'>
+                <span class='rime-tag'>" . htmlspecialchars($r['rime']) . "</span>
+            </td>
+            <td class='signif-box'>
+                <div>" . nl2br(htmlspecialchars($r['signification'])) . "</div>" . 
+                (!empty($r['exemple']) ? "<div class='exemple-text'>" . htmlspecialchars($r['exemple']) . "</div>" : "") . "
+            </td>
         </tr>
     </table>";
 }
 
-// 9. ASSEMBLAGE ET GÉNÉRATION
+// 9. GÉNÉRATION FINALE
 $mpdf->WriteHTML($stylesheet, \Mpdf\HTMLParserMode::HEADER_CSS);
-
-// Écriture de la page de garde
 $mpdf->WriteHTML($coverHtml, \Mpdf\HTMLParserMode::HTML_BODY);
 
-// Saut de page avant le catalogue
 $mpdf->AddPage();
 
-// Configuration du pied de page pour le catalogue
+// Pied de page
 $mpdf->SetHTMLFooter("
-    <table width='100%' style='border-top: 0.1mm solid {$colorMuted}; font-size: 9pt; color: {$colorMuted};'>
+    <table width='100%' style='border-top: 0.1mm solid {$colorMuted}; font-size: 8pt; color: {$colorMuted}; padding-top: 5px;'>
         <tr>
             <td width='33%'>Dico Kabyle des Rimes</td>
             <td width='33%' align='center'>Page {PAGENO} sur {nbpg}</td>
-            <td width='33%' style='text-align: right;'>Catalogue Officiel</td>
+            <td width='33%' style='text-align: right;'>© " . date('Y') . " - Catalogue Linguistique</td>
         </tr>
     </table>");
 
-// Écriture du contenu
 $mpdf->WriteHTML($contentHtml, \Mpdf\HTMLParserMode::HTML_BODY);
 
-// Nettoyage du tampon et Sortie
 ob_end_clean();
-$mpdf->Output('Catalogue_Rimes_Kabyles.pdf', 'I'); // 'I' pour l'afficher dans le navigateur
+$mpdf->Output('Dico_Kabyle_Catalogue.pdf', 'I');

@@ -1,7 +1,7 @@
 <?php
 /**
  * ÉDITION COMPLÈTE D'UN UTILISATEUR (Admin side)
- * Stratégie de sécurité : Protection absolue du rang Superadmin via Auth::getRole()
+ * Stratégie de sécurité : Protection absolue du rang Superadmin
  */
 require_once __DIR__ . '/../src/RhymeEngine.php';
 require_once __DIR__ . '/../src/AdminEngine.php';
@@ -33,30 +33,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $prenom   = trim($_POST['prenom'] ?? '');
     $nom      = trim($_POST['nom'] ?? '');
     $email    = trim($_POST['email'] ?? '');
+    $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : $user['is_active'];
     
     // Validation : Aucun champ obligatoire vide
     if (empty($username) || empty($prenom) || empty($nom) || empty($email)) {
         $message = "<p class='error-msg'>❌ Tous les champs (Username, Prénom, Nom, Email) sont obligatoires.</p>";
     } else {
+        // Protection du rôle Superadmin : on ne peut pas rétrograder un superadmin ni en créer un sans être superadmin
         $roleToSave = $isTargetSuperadmin ? 'superadmin' : ($_POST['role'] ?? $user['role']);
 
         $data = [
-            'username' => $username,
-            'prenom'   => $prenom,
-            'nom'      => $nom,
-            'email'    => $email,
-            'role'     => $roleToSave,
-            'password' => $_POST['password'] // L'AdminEngine gère le hash si non vide
+            'username'  => $username,
+            'prenom'    => $prenom,
+            'nom'       => $nom,
+            'email'     => $email,
+            'role'      => $roleToSave,
+            'is_active' => $isActive,
+            'password'  => $_POST['password'] // L'AdminEngine gère le hash si non vide
         ];
 
         if ($admin->updateUser($id, $data)) {
             $message = "<p class='success-msg'>✅ Fiche utilisateur mise à jour avec succès.</p>";
+            // Rafraîchir les données
             $user = $admin->getUserById($id);
+            // Si on s'édite soi-même, mettre à jour la session
             if ($id === Auth::getUserId()) {
                 $_SESSION['username'] = $user['username'];
             }
         } else {
-            $message = "<p class='error-msg'>❌ Erreur lors de l'enregistrement.</p>";
+            $message = "<p class='error-msg'>❌ Erreur lors de l'enregistrement (Vérifiez si l'email ou le username est déjà utilisé).</p>";
         }
     }
 }
@@ -65,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Éditer Membre - Admin</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
@@ -85,10 +91,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <?php include __DIR__ . '/../src/views/navbar.php'; ?>
     <div class="container">
-        <header class="admin-header">
-            <h1>Éditer le membre : <?= htmlspecialchars($user['username']) ?></h1>
+        <div class="admin-header">
+            <div>
+                <h1>Éditer le membre : <?= htmlspecialchars($user['username']) ?></h1>
+                <p>ID Utilisateur : #<?= $user['id'] ?></p>
+            </div>
             <a href="manage_users.php" class="btn-primary">← Liste des membres</a>
-        </header>
+        </div>
 
         <?= $message ?>
 
@@ -97,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label>Nom d'utilisateur *</label>
                 <input type="text" name="username" value="<?= htmlspecialchars($user['username']) ?>" required>
             </div>
+
             <div class="form-group">
                 <label>Nouveau mot de passe (laisser vide pour inchangé)</label>
                 <div class="password-container">
@@ -104,6 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <span class="toggle-password" id="toggle_eye">👁️</span>
                 </div>
             </div>
+
             <div class="form-group">
                 <label>Nom *</label>
                 <input type="text" name="nom" value="<?= htmlspecialchars($user['nom'] ?? '') ?>" required>
@@ -112,15 +123,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label>Prénom *</label>
                 <input type="text" name="prenom" value="<?= htmlspecialchars($user['prenom'] ?? '') ?>" required>
             </div>
+
             <div class="form-group">
                 <label>Email *</label>
                 <input type="email" name="email" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
             </div>
+
             <div class="form-group">
                 <label>Rôle du compte</label>
                 <?php if ($isTargetSuperadmin): ?>
-                    <input type="text" class="input-readonly" value="Superadmin (Accès Racine)" readonly>
-                    <span class="info-lock">🔒 Rôle protégé (Super Admin).</span>
+                    <input type="text" class="input-readonly" value="Superadmin" readonly>
+                    <span class="info-lock">🔒 Rôle protégé.</span>
+                    <input type="hidden" name="role" value="superadmin">
                 <?php else: ?>
                     <select name="role" required>
                         <option value="user" <?= $user['role'] === 'user' ? 'selected' : '' ?>>User (Contributeur)</option>
@@ -129,6 +143,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                 <?php endif; ?>
             </div>
+
+            <div class="form-group">
+                <label>Statut d'activation</label>
+                <?php if ($id === Auth::getUserId()): ?>
+                    <input type="text" class="input-readonly" value="Actif (Vous)" readonly>
+                    <input type="hidden" name="is_active" value="1">
+                <?php else: ?>
+                    <select name="is_active" required>
+                        <option value="1" <?= $user['is_active'] == 1 ? 'selected' : '' ?>>✅ Compte Actif</option>
+                        <option value="0" <?= $user['is_active'] == 0 ? 'selected' : '' ?>>🚫 Compte Suspendu</option>
+                    </select>
+                <?php endif; ?>
+            </div>
+
             <div class="full-width">
                 <button type="button" class="btn-submit btn-full" onclick="openModal()">Sauvegarder les modifications</button>
             </div>

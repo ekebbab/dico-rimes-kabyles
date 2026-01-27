@@ -1,20 +1,30 @@
 <?php
+require_once __DIR__ . '/../src/Auth.php';
+Auth::init(); 
+
 require_once __DIR__ . '/../src/RhymeEngine.php';
+require_once __DIR__ . '/../src/terminaisons.php';
 
 $engine = new RhymeEngine();
 
-// Paramètres étendus pour les 3 colonnes
 $params = [
-    'q'            => $_GET['q'] ?? '',
-    'type'         => $_GET['type'] ?? 'all',
-    'famille'      => $_GET['famille'] ?? '',
-    'sous_famille' => $_GET['sous_famille'] ?? '',
-    'sort'         => $_GET['sort'] ?? 'mot', // Changé par défaut en 'mot' pour le dictionnaire
-    'order'        => $_GET['order'] ?? 'asc',
-    'limit'        => $_GET['limit'] ?? '50'
+    'q'      => $_GET['q'] ?? '',
+    'type'   => $_GET['type'] ?? 'all',
+    'lettre' => $_GET['lettre'] ?? '',
+    'rime'   => $_GET['rime'] ?? '',
+    'classe' => $_GET['classe'] ?? '',
+    'sort'   => $_GET['sort'] ?? 'mot',
+    'order'  => $_GET['order'] ?? 'asc',
+    'limit'  => $_GET['limit'] ?? '50'
 ];
 
-$searchQuery = htmlspecialchars($params['q']); 
-$results = $engine->searchAdvanced($params);
+$results = [];
+// Recherche déclenchée si q ou lettre est présent
+if (!empty($params['q']) || !empty($params['lettre'])) {
+    $results = $engine->searchAdvanced($params);
+}
+
+// On garde la variable vide si aucune recherche n'est faite
+$searchQuery = isset($_GET['q']) ? htmlspecialchars($_GET['q']) : ''; 
 
 include __DIR__ . '/../src/views/home.php';
